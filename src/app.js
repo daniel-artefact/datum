@@ -176,7 +176,7 @@ function autoCheck() {
   if (S.wheels.some(w => !w)) return { ok: false, why: ['a tire was not found'] };
   S.wheels.forEach((w, k) => {
     const nm = k === rearIdx() ? 'rear' : 'front';
-    if (w.rms > 0.8) why.push(`${nm} trace not clean (fit ${fmt(w.rms, 2)} px)`);
+    if (rmsMm(w) > TRACE.greenRms) why.push(`${nm} trace not clean (off by ${fmt(rmsMm(w), 2)} mm on average)`);
     if (w.coverage < 0.5) why.push(`${nm} tire only ${Math.round(w.coverage * 100)}% traced`);
   });
   const g = gradePhoto(), st = g && g.items.find(i => i.label === 'Front wheel straight');
@@ -200,8 +200,8 @@ function ptsToEll(P) {
 function tirePtColor(k, i) {
   const w = S.wheels[k];
   if (!w) return '#F04438';
-  const d = Math.abs(Core.ellDist(w.ell, S.tirePts[k][i][0], S.tirePts[k][i][1]));
-  return d <= 2 && w.rms <= 0.6 ? '#3FB950' : d <= 5 && w.rms <= 1 ? '#F2C230' : '#F04438';
+  const m = mmPerPx(), d = Math.abs(Core.ellDist(w.ell, S.tirePts[k][i][0], S.tirePts[k][i][1])) * m, r = w.rms * m;
+  return d <= TRACE.greenDot && r <= TRACE.greenRms ? '#3FB950' : d <= TRACE.yellowDot && r <= TRACE.yellowRms ? '#F2C230' : '#F04438';
 }
 function flashTirePt(k, i) {
   S.flash = { k, i, t0: performance.now() };
@@ -235,7 +235,12 @@ function retraceWheel(k) {
   afterChange();
 }
 // how cleanly a tire edge was traced: rms of the fit in px and the share of the edge found
-const wheelQuality = w => !w ? 'none' : (w.rms <= 0.6 && w.coverage >= 0.45 ? 'clean' : w.rms <= 1 && w.coverage >= 0.3 ? 'check' : 'none');
+// Trace quality in millimeters, not pixels, so a sharper photo isn't judged harder (Daniel 2026-11-25).
+// The yardstick is a 700x30 tire, 682 mm across: good enough to grade a trace, never used for a measurement.
+const TRACE = { tireMm: 682, greenRms: 0.75, yellowRms: 1.5, greenDot: 2.5, yellowDot: 6 };
+const mmPerPx = () => { const d = S.wheels.filter(Boolean).map(w => 2 * Math.max(w.ell.a, w.ell.b)); return d.length ? TRACE.tireMm / Math.max(...d) : 1; };
+const rmsMm = w => w.rms * mmPerPx();
+const wheelQuality = w => !w ? 'none' : (rmsMm(w) <= TRACE.greenRms && w.coverage >= 0.45 ? 'clean' : rmsMm(w) <= TRACE.yellowRms && w.coverage >= 0.3 ? 'check' : 'none');
 
 // ---------- pipeline ----------
 function recompute() {
@@ -653,7 +658,8 @@ function gradePhoto() {
   const adv = Math.abs(yaw) > Math.abs(pitch) ? 'Stand square to the middle of the bike.' : (pitch > 0 ? 'Lower the camera toward saddle height, or step back and zoom in.' : 'Raise the camera toward saddle height, or step back and zoom in.');
   add(slant < 8 ? 'good' : slant < 20 ? 'ok' : 'poor', 'Camera angle', `${fmt(slant, 1)}° off square`, adv);
   const cov = Math.min(...S.wheels.map(w => Math.min(1, w.coverage))), rms = Math.max(...S.wheels.map(w => w.rms));
-  add(cov >= 0.5 && rms < 1 ? 'good' : cov >= 0.3 ? 'ok' : 'poor', 'Tire outlines', `${Math.round(cov * 100)}% traced`, 'Use a plain background that contrasts with the tires.');
+  const rmm = Math.max(...S.wheels.map(rmsMm)); // the same millimeter limits as the dots and the Rear/Front labels
+  add(cov >= 0.45 && rmm <= TRACE.greenRms ? 'good' : cov >= 0.3 && rmm <= TRACE.yellowRms ? 'ok' : 'poor', 'Tire outlines', `${Math.round(cov * 100)}% traced, within ${fmt(rmm, 1)} mm`, 'Move any yellow or red dots onto the outer edge of the tire, or use a plainer background.');
   // A turned front wheel makes the front tire, and only the front tire, look narrower than tall after correction.
   // Squash that both tires share (edge finding at the ground, the solve itself) says nothing about steering.
   const oor = S.rect.wheels.map(w => { const e = Core.ellExtents(w.ell); return e.h / e.w - 1; }), ri = rearIdx();
@@ -926,9 +932,12 @@ function nearLine(x, y, rad = 8) {
   return best;
 }
 function handle(p, set, end, key) { S.handles.push({ x: p[0], y: p[1], set, end, key }); }
+// a locked control: holding it shows the axis guide lines and shakes it; it never moves
+function lockedHandle(p, id) { S.handles.push({ x: p[0], y: p[1], set: () => {}, end: () => draw(), key: 'steerLocked', shake: { id, kind: 'steerLock' } }); }
 // Points the tool calculates can't be dragged: they shake and say why.
 const LOCK_MSG = {
   axle: 'Axle locations are calculated from the wheel and camera angle.',
+  steerLock: 'Locked. Click the padlock beside it to unlock.',
   sta: 'Set the seat tube angle first: drag the STA arc. The top of the saddle sits on that line.',
   bb: 'The BB location is calculated from the chainring and the camera angle. Adjust it on the Setup page.',
 };
@@ -1048,7 +1057,7 @@ function draw() {
       const M = Pt && Pb ? [(Pt[0] + Pb[0]) / 2, (Pt[1] + Pb[1]) / 2] : G;
       const half = Pt && Pb ? Math.max(15 / s, Math.hypot(Pt[0] - Pb[0], Pt[1] - Pb[1]) / 4) : 35 / s; // a quarter of the head tube either side of the middle
       const A = [M[0] + ux * half, M[1] + uy * half], B = [M[0] - ux * half, M[1] - uy * half];
-      const mS = r2s(M), aS = r2s(A), bS = r2s(B), mc = markCol('steer'), mcA = S.lockA ? COL.guess : mc, mcX = S.lockX ? COL.guess : mc;
+      const mS = r2s(M), aS0 = r2s(A), bS0 = r2s(B), aS = [aS0[0] + shakeOff('steerA'), aS0[1]], bS = [bS0[0] + shakeOff('steerX'), bS0[1]], mc = markCol('steer'), mcA = S.lockA ? COL.guess : mc, mcX = S.lockX ? COL.guess : mc;
       const su = [aS[0] - mS[0], aS[1] - mS[1]], sl = Math.hypot(su[0], su[1]) || 1;
       if (untouched('steer')) { if (!S.lockA) beacon(aS, mc); if (!S.lockX) beacon(bS, mc); }
       arcGlyph([aS[0] - su[0] / sl * 70, aS[1] - su[1] / sl * 70], aS, mcA, null); // drawn as a gentle arc
@@ -1066,18 +1075,20 @@ function draw() {
       const rot = (q, cs, sn) => { const wx = q[0] - M0[0], wy = q[1] - M0[1]; return [M0[0] + wx * cs - wy * sn, M0[1] + wx * sn + wy * cs]; };
       let q0 = null; // angle: geared, as if the arm were 600 mm, so the arc can sit close to the pivot
       // a padlock beside each control: angle and left/right lock separately
-      const side = bikeFrame(S.rect).dir > 0 ? 28 : -28, lkA = [aS[0] + side, aS[1]], lkX = [bS[0] + side, bS[1]];
+      const side = bikeFrame(S.rect).dir > 0 ? 28 : -28, lkA = [aS0[0] + side, aS0[1]], lkX = [bS0[0] + side, bS0[1]];
       padlock(lkA, S.lockA); padlock(lkX, S.lockX);
       handle(lkA, () => {}, () => { S.lockA = !S.lockA; afterChange(); }, 'lockA');
       handle(lkX, () => {}, () => { S.lockX = !S.lockX; afterChange(); }, 'lockX');
-      if (!S.lockA) handle(aS, p => { const q = toR(p); if (!q0) q0 = q;
+      if (S.lockA) lockedHandle(aS0, 'steerA');
+      else handle(aS, p => { const q = toR(p); if (!q0) q0 = q;
         const da = ((q[0] - q0[0]) * nrm[0] + (q[1] - q0[1]) * nrm[1]) / (600 / s), cs = Math.cos(da), sn = Math.sin(da);
         S.steer.g = Core.apply(S.rect.Hinv, ...rot(G0, cs, sn)); S.steer.t = Core.apply(S.rect.Hinv, ...rot(T0, cs, sn)); S.steer.set = true;
         carry(q => rot(q, cs, sn)); }, null, 'steer');
       const slide = () => { let l0 = null; return p => { const q = toR(p); if (!l0) l0 = q; const dx = q[0] - l0[0];
         S.steer.g = Core.apply(S.rect.Hinv, G0[0] + dx, G0[1]); S.steer.t = Core.apply(S.rect.Hinv, T0[0] + dx, T0[1]); S.steer.set = true;
         carry(q => [q[0] + dx, q[1]]); }; };
-      if (!S.lockX) { handle(bS, slide(), null, 'steer'); lineHandle(r2s(lo), r2s(hi), slide(), 'ew-resize', 'steer'); }
+      if (S.lockX) lockedHandle(bS0, 'steerX');
+      else { handle(bS, slide(), null, 'steer'); lineHandle(r2s(lo), r2s(hi), slide(), 'ew-resize', 'steer'); }
     }
     // seat tube line and fit
     const shRef = shPlaced() && ((S.wiz == null && S.tab === 'setup') || (S.wiz != null && WIZ[S.wiz] && WIZ[S.wiz].k === 'scale')); // after Done: the line stays as a reference
@@ -1236,7 +1247,7 @@ function drawLoupe(sx, sy) {
 function drawGuides(key) { // see-through lines parallel to the axis, to line up with the tube walls
   const s = S.scale.sx; let o, u, t0, t1;
   if ((key === 'st' || key === 'stoff') && S.sta) { o = S.sta.o; u = S.sta.u; t0 = 0; t1 = ((S.vals && S.vals.saddleHeight) || 750) / s; }
-  else if (key === 'steer' && S.steer) {
+  else if ((key === 'steer' || key === 'steerLocked') && S.steer) {
     const G = Core.apply(S.rect.H, ...S.steer.g), T = Core.apply(S.rect.H, ...S.steer.t), L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1;
     o = G; u = [(T[0] - G[0]) / L, (T[1] - G[1]) / L];
     const tp = k => { if (!S.geo[k]) return null; const q = Core.apply(S.rect.H, ...onSteer(S.geo[k].p)); return (q[0] - o[0]) * u[0] + (q[1] - o[1]) * u[1]; };
@@ -1257,7 +1268,7 @@ function loupeShape(w, h, tall) {
 }
 // Turning the seat tube angle or the steering axis: a tall 100 x 200 mm window that stays where you clicked, with
 // see-through guide lines parallel to the axis (seat tube 25 and 35 mm apart, head tube 40 and 60 mm) to line up with the tube walls.
-const AXIS_GUIDES = { st: [25, 35], stoff: [25, 35], steer: [40, 60] };
+const AXIS_GUIDES = { st: [25, 35], stoff: [25, 35], steer: [40, 60], steerLocked: [40, 60] };
 function drawAxisLoupe(a) {
   if (!S.img || !S.rect || !S.scale || !S.scale.sx) return;
   loupe.classList.remove('ring'); loupeShape(240, 480, true);
@@ -1407,6 +1418,7 @@ cv.addEventListener('pointerdown', e => {
   const touch = e.pointerType === 'touch', HIT = touch ? 26 : 14;
   let best = null, bd = HIT;
   for (const h of S.handles) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } }
+  if (best && !S.tool && best.shake) { shakeLocked(best.shake); S.drag = { h: best, x, y, moved: true, axis: axisAt(best.key, x, y) }; draw(); return; }
   if (best && !S.tool) { if (best.key) S.touched[best.key] = true; S.drag = { h: best, x, y, moved: true, riders: ridersStart(best.key), axis: axisAt(best.key, x, y) }; if (!S.drag.axis && !/^lock/.test(best.key || '')) drawLoupe(best.x, best.y); return; }
   if (!S.tool) { // a locked point explains itself, even where a line runs through it
     let lk = null, ld = touch ? 22 : 12;
@@ -1681,6 +1693,8 @@ const WIZ = [
     enter: () => { S.view.mode = 'orig'; },
     can: () => { const left = S.tirePlaced.flat().filter(v => !v).length;  // pulsing points are the ones still to place
       if (left) return `Place all ten points first: ${left} still to place.`;
+      const red = [0, 1].reduce((n, k) => n + [0, 1, 2, 3, 4].filter(i => S.wheels[k] && tirePtColor(k, i) === '#F04438').length, 0);
+      if (red) return `Move the ${red} red dot${red > 1 ? 's' : ''} onto the outer edge of the tire first.`;
       return S.wheels.every(w => wheelQuality(w) !== 'none') ? true : 'Both tire edges have to be traced first. If they can\'t be, the photo needs a plainer background.'; },
     zoom: () => null,
     info: () => ['Photo check', photoReport()] },

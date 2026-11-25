@@ -4,6 +4,11 @@ Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATU
 Rolling back = pasting the previous version's link.
 
 ## v2 (in progress)
+- Tire trace quality judged in millimeters, not pixels (a sharper photo was judged harder): sized by a 700x30 tire
+  (682 mm). Green: trace within 0.75 mm on average and the dot within 2.5 mm of the edge; yellow: 1.5 mm and 6 mm;
+  red beyond. The same limits drive the dots, the Rear/Front labels and the photo check. Red dots now block OK.
+- Locked steering axis controls: pressing and holding one shows the head tube guide lines and shakes it, with a note
+  to unlock; it no longer moves (before, a locked control could still drag the axis line).
 - Setup flow (Daniel's copy): start screen with why DATUM exists, signed - Daniel, then three oxide buttons: Demo: good edge detection, Demo: bad edge detection, Upload your photo (header button: Demos); after OK on each step the setup
   panel shows that step's info slide to read, then OK moves on (Back returns to the step): after the tires, a photo check (camera angle, tire outlines, front wheel,
   resolution, with advice); the chainring step explains finding the chainring's center, then a slide to check the
