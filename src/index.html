@@ -16,9 +16,7 @@ __CSS__</style>
   <div class="brand"><span class="mark">ARTEFACT: Fit tools</span><h1>DATUM</h1></div>
   <div class="sub">One side-on photo of your bike. The two tires correct the camera angle; one real measurement sets the scale. The photo stays in your browser.</div>
   <div class="row">
-    <button class="btn" id="exTilted">Example: tilted</button>
-    <button class="btn" id="exDead">Example: dead-on</button>
-    <button class="btn" id="exStairs">Example: stairs</button>
+    <button class="btn" id="showStart" title="The examples and what DATUM is">Examples</button>
     <button class="btn" id="resetPhoto" title="Forget everything placed on this photo and start again, as if just uploaded">Reset photo</button>
     <label class="btn primary" for="file" tabindex="0">Open photo</label>
     <input type="file" id="file" accept="image/*" hidden>
@@ -171,7 +169,21 @@ __CSS__</style>
     </div>
   </aside>
 </main>
-<footer>ARTEFACT: Designed in California. Prototype, accuracy still being tested.</footer>
+<div id="start" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+  <div class="startCard">
+    <span class="mark">ARTEFACT: Fit tools</span>
+    <h2 id="startTitle">DATUM</h2>
+    <p>Measures a bike's fit and frame geometry from one photo taken from the side.</p>
+    <p>The two tires show the camera angle, so the photo can be squared up. One measurement you trust, like the wheelbase, sets the scale. The photo stays in your browser and is never uploaded.</p>
+    <div class="startOpts">
+      <button class="btn primary" id="startUpload">Upload your photo</button>
+      <button class="btn opt" id="startGood">Example: good edge detection<span>Plain wall, square to the bike. The tires trace on their own.</span></button>
+      <button class="btn opt" id="startHard">Example: bad edge detection<span>Busy background. Shows how to fix the tire outlines by hand.</span></button>
+    </div>
+    <button class="startClose" id="startClose">Back to my photo</button>
+  </div>
+</div>
+<footer>ARTEFACT: Designed in California. Beta, accuracy still being tested.</footer>
 <script>
 __CORE__
 </script>

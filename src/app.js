@@ -706,6 +706,7 @@ function fitView() {
   const r = cv.getBoundingClientRect();
   const z = Math.min(r.width / S.img.W, r.height / S.img.H) * 0.97;
   S.view.z = z; S.view.ox = S.img.W / 2 - r.width / (2 * z); S.view.oy = S.img.H / 2 - r.height / (2 * z);
+  if (r.width < 700) S.view.oy = -10 / z; // phones: photo at the top, clear of the setup bar at the bottom
   draw();
 }
 function zoomAt(f, sx, sy) {
@@ -727,6 +728,9 @@ function line(a, b, col, w = 1.5, dash) {
   ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = w + 2; ctx.stroke();
   ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); ctx.restore();
 }
+// phones: bigger points and labels (S.lens: the magnifier keeps its own scale)
+const UI = () => (!S.lens && cv.clientWidth > 0 && cv.clientWidth < 700 ? 1.35 : 1);
+const TAGFONT = () => `500 ${Math.round(12 * UI())}px "IBM Plex Mono", ui-monospace, monospace`;
 function tag(x, y, text, col, prio = 0) {
   if (S.lens) return;
   if (S.tagQ) { S.tagQ.push({ x, y, text, col, prio }); return; }
@@ -734,36 +738,36 @@ function tag(x, y, text, col, prio = 0) {
 }
 function placeTags() {
   const Q = S.tagQ; S.tagQ = null; if (!Q) return;
-  ctx.save(); ctx.font = '500 12px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.save(); ctx.font = TAGFONT();
   const boxes = (S.handles || []).map(h => [h.x - 9, h.y - 9, h.x + 9, h.y + 9]); // keep labels off the points you grab
   const hit = (b) => boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
   const order = Q.map((t, i) => [t, i]).sort((a, b) => a[0].prio - b[0].prio || a[1] - b[1]);
   for (const [t] of order) {
-    const w = ctx.measureText(t.text).width + 10, h = 20;
+    const w = ctx.measureText(t.text).width + 10, h = 20 * UI();
     const tries = [[0, 0]];
     for (let r = 1; r <= 5; r++) tries.push([0, -22 * r], [0, 22 * r], [w * 0.55 * r, 0], [-w * 0.55 * r, 0]);
     let pick = tries[0];
     for (const [dx, dy] of tries) { const b = [t.x + dx - w / 2 - 2, t.y + dy - h / 2 - 2, t.x + dx + w / 2 + 2, t.y + dy + h / 2 + 2]; if (!hit(b)) { pick = [dx, dy]; break; } }
     const x = t.x + pick[0], y = t.y + pick[1];
     boxes.push([x - w / 2 - 2, y - h / 2 - 2, x + w / 2 + 2, y + h / 2 + 2]);
-    if (pick[0] || pick[1]) { ctx.restore(); line([t.x, t.y], [x, y], 'rgba(230,225,211,.35)', 0.8); ctx.save(); ctx.font = '500 12px "IBM Plex Mono", ui-monospace, monospace'; }
+    if (pick[0] || pick[1]) { ctx.restore(); line([t.x, t.y], [x, y], 'rgba(230,225,211,.35)', 0.8); ctx.save(); ctx.font = TAGFONT(); }
     drawTag(x, y, t.text, t.col);
   }
   ctx.restore();
 }
 function drawTag(x, y, text, col) {
-  ctx.save(); ctx.font = '500 12px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.save(); ctx.font = TAGFONT();
   const w = ctx.measureText(text).width + 10;
-  ctx.fillStyle = 'rgba(22,21,19,.92)'; ctx.fillRect(x - w / 2, y - 10, w, 20);
+  const th = 20 * UI(); ctx.fillStyle = 'rgba(22,21,19,.92)'; ctx.fillRect(x - w / 2, y - th / 2, w, th);
   ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 0.5); ctx.restore();
 }
 function lineTag(a, b, text, col) {
   const steep = Math.abs(b[1] - a[1]) > Math.abs(b[0] - a[0]);
-  ctx.save(); ctx.font = '500 12px "IBM Plex Mono", ui-monospace, monospace'; const w = ctx.measureText(text).width / 2 + 14; ctx.restore();
+  ctx.save(); ctx.font = TAGFONT(); const w = ctx.measureText(text).width / 2 + 14; ctx.restore();
   if (steep) tag(Math.max(a[0], b[0]) + w, (a[1] + b[1]) / 2 + 14, text, col); else tag((a[0] + b[0]) / 2, Math.min(a[1], b[1]) - 17, text, col);
 }
 function dot(p, col, r = 5, label, lx = 0, ly = -19) {
-  ctx.save(); ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 6.2832);
+  r *= UI(); ctx.save(); ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 6.2832);
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill(); ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.stroke();
   ctx.lineWidth = 1.6; ctx.strokeStyle = col; ctx.stroke();
   ctx.beginPath(); ctx.arc(p[0], p[1], 1.2, 0, 6.2832); ctx.fillStyle = col; ctx.fill(); ctx.restore();
@@ -908,12 +912,12 @@ function drawDims() {
 function beacon(s, col) {
   const ph = (performance.now() % 1200) / 1200;
   ctx.save(); ctx.globalAlpha = 1 - ph; ctx.strokeStyle = col; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(s[0], s[1], 6 + 16 * ph, 0, 6.2832); ctx.stroke(); ctx.restore();
+  ctx.beginPath(); ctx.arc(s[0], s[1], (6 + 16 * ph) * UI(), 0, 6.2832); ctx.stroke(); ctx.restore();
 }
 // a line that can be dragged: a, b in screen px; points have priority over lines
 function lineHandle(a, b, set, cursor, key) { S.lineHandles.push({ a, b, set, cursor, key }); }
-function nearLine(x, y) {
-  let best = null, bd = 8;
+function nearLine(x, y, rad = 8) {
+  let best = null, bd = rad;
   for (const h of S.lineHandles || []) {
     const dx = h.b[0] - h.a[0], dy = h.b[1] - h.a[1], L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - h.a[0]) * dx + (y - h.a[1]) * dy) / L2));
     const d = Math.hypot(h.a[0] + dx * t - x, h.a[1] + dy * t - y);
@@ -990,7 +994,7 @@ function draw() {
         if (!placed && !fl) { // beacon: a ring that grows and fades, every 1.2 s
           const ph = (performance.now() % 1200) / 1200;
           ctx.save(); ctx.globalAlpha = 1 - ph; ctx.strokeStyle = col; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(s[0], s[1], 6 + 16 * ph, 0, 6.2832); ctx.stroke(); ctx.restore();
+          ctx.beginPath(); ctx.arc(s[0], s[1], (6 + 16 * ph) * UI(), 0, 6.2832); ctx.stroke(); ctx.restore();
         }
         dot(s, col, fl ? 8 : 6);
         handle(s, p => { P[i] = p; }, () => placeTirePt(k, i));
@@ -1388,23 +1392,41 @@ function clickAt(sx, sy) {
     afterChange();
   }
 }
+const PTR = new Map(); // fingers on the photo
+const pinchState = () => { const [a, b] = [...PTR.values()]; return { d: Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; };
 cv.addEventListener('pointerdown', e => {
   if (!S.img) return;
   const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
   cv.setPointerCapture(e.pointerId);
-  let best = null, bd = 14;
+  PTR.set(e.pointerId, [x, y]);
+  if (PTR.size >= 2) { // second finger: pinch. If the first finger had started moving a point, put it back.
+    if (S.drag && S.drag.h && S.hist && S.hist.cur) { Object.assign(S, JSON.parse(S.hist.cur)); recompute(); }
+    loupe.style.display = 'none';
+    S.drag = Object.assign({ pinch: true }, pinchState()); draw(); return;
+  }
+  const touch = e.pointerType === 'touch', HIT = touch ? 26 : 14;
+  let best = null, bd = HIT;
   for (const h of S.handles) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } }
   if (best && !S.tool) { if (best.key) S.touched[best.key] = true; S.drag = { h: best, x, y, moved: true, riders: ridersStart(best.key), axis: axisAt(best.key, x, y) }; if (!S.drag.axis && !/^lock/.test(best.key || '')) drawLoupe(best.x, best.y); return; }
   if (!S.tool) { // a locked point explains itself, even where a line runs through it
-    let lk = null, ld = 12;
+    let lk = null, ld = touch ? 22 : 12;
     for (const h of S.locked || []) { const d = Math.hypot(h.x - x, h.y - y); if (d < ld) { ld = d; lk = h; } }
     if (lk) { S.drag = null; shakeLocked(lk); return; }
   }
-  if (!S.tool) { const lh = nearLine(x, y); if (lh) { if (lh.key) S.touched[lh.key] = true; S.drag = { h: lh, x, y, moved: true, line: true, riders: ridersStart(lh.key), axis: axisAt(lh.key, x, y) }; return; } }
+  if (!S.tool) { const lh = nearLine(x, y, touch ? 16 : 8); if (lh) { if (lh.key) S.touched[lh.key] = true; S.drag = { h: lh, x, y, moved: true, line: true, riders: ridersStart(lh.key), axis: axisAt(lh.key, x, y) }; return; } }
   S.drag = { pan: true, x, y, x0: x, y0: y, moved: false };
 });
 cv.addEventListener('pointermove', e => {
   const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  if (PTR.has(e.pointerId)) PTR.set(e.pointerId, [x, y]);
+  if (S.drag && S.drag.pinch) {
+    if (PTR.size >= 2) {
+      const d = S.drag, n = pinchState(), v = S.view;
+      v.ox -= (n.m[0] - d.m[0]) / v.z; v.oy -= (n.m[1] - d.m[1]) / v.z; // follow the fingers
+      zoomAt(n.d / d.d, n.m[0], n.m[1]); d.d = n.d; d.m = n.m;
+    }
+    return;
+  }
   S.hover = [x, y];
   const d = S.drag;
   if (d && d.h) {
@@ -1422,7 +1444,14 @@ cv.addEventListener('pointermove', e => {
   } else if (S.tool) { drawLoupe(x, y); if (S.pending) draw(); }
   else if (!d) { const lh = nearLine(x, y); cv.style.cursor = lh ? lh.cursor : ''; }
 });
+const endPointer = e => {
+  PTR.delete(e.pointerId);
+  if (S.drag && S.drag.pinch) { if (PTR.size === 0) S.drag = null; return true; } // the pinch ends when the last finger lifts
+  return false;
+};
+cv.addEventListener('pointercancel', e => { if (!endPointer(e) && S.drag && !S.drag.h) S.drag = null; });
 cv.addEventListener('pointerup', e => {
+  if (endPointer(e)) return;
   const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, d = S.drag;
   S.drag = null;
   if (!d) return;
@@ -1682,7 +1711,7 @@ function wizGo(i) {
 }
 function renderWiz() {
   const on = S.wiz != null, st = on ? WIZ[S.wiz] : null;
-  $('wiz').style.display = on ? '' : 'none';
+  $('wiz').style.display = on && S.img ? '' : 'none'; // no setup bar before there is a photo
   $('tabbar').style.display = on ? 'none' : '';
   for (const b of document.querySelectorAll('#tabbar button')) {
     b.setAttribute('aria-selected', String(b.dataset.tab === S.tab));
@@ -1735,13 +1764,23 @@ $('geoOut').addEventListener('change', e => { const k = e.target.dataset && e.ta
 
 // ---------- controls ----------
 $('resetPhoto').onclick = () => { if (!S.src) return; try { localStorage.removeItem(S.storeKey); } catch (e) {} loadImage(S.src, S.preset); };
-$('exTilted').onclick = () => loadImage(EXAMPLES.tilted.src, EXAMPLES.tilted);
-$('exDead').onclick = () => loadImage(EXAMPLES.dead.src, EXAMPLES.dead);
-$('exStairs').onclick = () => loadImage(EXAMPLES.stairs.src, EXAMPLES.stairs);
-$('file').onchange = e => { const f = e.target.files[0]; if (f) loadImage(f, null); e.target.value = ''; };
+// start screen: what DATUM is, then your own photo or one of two examples
+function showStart(on) {
+  $('start').style.display = on ? 'flex' : 'none';
+  $('startClose').style.display = on && S.img ? '' : 'none';
+  if (!S.img) $('wiz').style.display = 'none'; // no setup bar before there is a photo
+  if (on) $('startUpload').focus();
+}
+$('showStart').onclick = () => showStart(true);
+$('startClose').onclick = () => showStart(false);
+$('startUpload').onclick = () => $('file').click();
+$('startGood').onclick = () => { showStart(false); loadImage(EXAMPLES.dead.src, EXAMPLES.dead); };
+$('startHard').onclick = () => { showStart(false); loadImage(EXAMPLES.stairs.src, EXAMPLES.stairs); };
+$('start').addEventListener('keydown', e => { if (e.key === 'Escape' && S.img) showStart(false); });
+$('file').onchange = e => { const f = e.target.files[0]; if (f) { showStart(false); loadImage(f, null); } e.target.value = ''; };
 document.querySelector('label[for="file"]').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
 $('stage').addEventListener('dragover', e => e.preventDefault());
-$('stage').addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) loadImage(f, null); });
+$('stage').addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) { showStart(false); loadImage(f, null); } });
 $('vOrig').onclick = () => { S.view.mode = 'orig'; renderAll(); draw(); };
 $('vFlat').onclick = () => { S.view.mode = 'flat'; renderAll(); draw(); };
 const center = () => { const r = cv.getBoundingClientRect(); return [r.width / 2, r.height / 2]; };
@@ -1823,7 +1862,7 @@ $('copyPts').onclick = async () => {
 const DATUM_VERSION = 'v2';
 { const f = document.querySelector('footer'); if (f) f.textContent = f.textContent.trim() + ' - DATUM ' + DATUM_VERSION; }
 sizeCanvas();
-loadImage(EXAMPLES.tilted.src, EXAMPLES.tilted);
+showStart(true); // nothing loads until the visitor picks
 
 $('undo').onclick = () => histGo(true); $('redo').onclick = () => histGo(false); histButtons();
 

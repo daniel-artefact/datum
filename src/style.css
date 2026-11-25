@@ -159,3 +159,36 @@ table.g td.e input.ci { width: 62px; background: var(--card); border: 1px solid 
 #sideAsk .q { font-family: 'Archivo Expanded', 'Archivo', sans-serif; font-weight: 600; margin: 0 0 6px; }
 #sideAsk p { margin: 0 0 12px; }
 #sideAsk .row { display: flex; gap: 8px; }
+/* phones: the toolbar becomes one scrolling row above the photo, setup sits in a bar at the bottom, bigger targets */
+@media (max-width: 700px) {
+  header { padding: 12px 16px; gap: 8px 16px; }
+  header .sub { display: none; }
+  header .row .btn { padding: 10px 12px; }
+  .stage { height: 72svh; min-height: 380px; display: flex; flex-direction: column; }
+  .toolbar { order: -1; position: static; flex: none; max-width: none; flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding: 8px 10px;
+    background: var(--ground); border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .toolbar::-webkit-scrollbar { display: none; }
+  .toolbar .grp { flex: none; }
+  .toolbar button { padding: 11px 12px; font-size: 12px; }
+  #cv { position: relative; inset: auto; flex: 1; min-height: 0; height: auto; }
+  #loupe { width: 140px; height: 140px; }
+  #wiz { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; max-height: 42svh; overflow-y: auto;
+    background: var(--card); border-top: 1px solid var(--vellum); box-shadow: 0 -10px 28px rgba(0,0,0,.55); }
+  .btn.okb { min-width: 120px; padding: 12px 18px; }
+  .panel .btn, .seg button { min-height: 40px; }
+}
+/* start screen */
+body { position: relative; }
+#start { position: absolute; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(22,21,19,.86); }
+.startCard { width: min(520px, 100%); background: var(--card); border: 1px solid var(--line); padding: 32px 32px 24px; display: flex; flex-direction: column; gap: 12px; }
+.startCard .mark { font: 500 11px var(--f-mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.startCard h2 { font: 700 34px/.95 var(--f-head); font-stretch: 125%; font-variation-settings: "wdth" 125; letter-spacing: .02em; margin: 0 0 4px; text-transform: uppercase; color: var(--vellum); }
+.startCard p { margin: 0; color: var(--body); font-size: 14.5px; }
+.startOpts { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.startOpts .btn { width: 100%; text-align: left; padding: 13px 16px; white-space: normal; }
+.startOpts .btn.opt span { display: block; margin-top: 4px; font: 13px/1.4 var(--f-body); letter-spacing: 0; text-transform: none; color: var(--muted); }
+.startClose { align-self: flex-start; margin-top: 4px; background: none; border: 0; padding: 6px 0; color: var(--muted); cursor: pointer;
+  font: 500 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 3px; }
+.startClose:hover { color: var(--vellum); }
+@media (max-width: 700px) { #start { align-items: flex-start; padding: 16px; } .startCard { padding: 24px 20px 18px; } .startCard h2 { font-size: 28px; } }

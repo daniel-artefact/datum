@@ -17,6 +17,7 @@ css = css.replace(':root {', ':host, .pf {', 1)
 css = css.replace('html, body { height: 100%; margin: 0; }', ':host { display: block; } .pf { height: 100%; margin: 0; }')
 css = css.replace('body { background:', '.pf { background:', 1)
 css = css.replace('  html, body { height: auto; }', '  .pf { height: auto; }')
+css = css.replace('body { position: relative; }', '.pf { position: relative; }')
 assert 'body {' not in css.replace('.pf {', ''), 'a body selector is left'
 core = (src / 'core.js').read_text()
 app = (src / 'app.js').read_text()

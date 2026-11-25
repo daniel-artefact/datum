@@ -46,7 +46,7 @@ async def store(b):
         # load the good-tracing example: from the start screen if there is one, else the header button
         await pg.evaluate(f"() => {{ const r = {R}; const b = r.querySelector('#startGood') || r.querySelector('#exDead'); b.click(); }}")
         await pg.wait_for_timeout(10000)
-        st = await pg.evaluate(f"() => {{ const r = {R}, c = r.querySelector('#cv'), x = c.getContext('2d').getImageData(c.width / 2 | 0, c.height / 2 | 0, 1, 1).data; return {{ wiz: (r.querySelector('#wizTitle') || {{}}).textContent || '', drawn: x[3] > 0, foot: r.querySelector('footer').textContent }}; }}")
+        st = await pg.evaluate(f"() => {{ const r = {R}, c = r.querySelector('#cv'), g = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < g.length; i += 4 * 997) if (g[i] > 0) n++; return {{ wiz: (r.querySelector('#wizTitle') || {{}}).textContent || '', drawn: n > 20, foot: r.querySelector('footer').textContent }}; }}")
         if not st['drawn']: fails.append(f'{nm}: photo not drawn after loading the example')
         if 'Tire' not in st['wiz']: fails.append(f"{nm}: setup did not reach the tire step ({st['wiz']!r})")
         await pg.screenshot(path=str(out / f'{nm}-example.png'))
