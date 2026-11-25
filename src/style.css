@@ -219,3 +219,7 @@ p.verdict { font-weight: 500; } p.verdict.lv-good { color: #3FB950; } p.verdict.
 .wizInfo ul.grade li { padding: 5px 8px; grid-template-columns: 46px 1fr auto; background: var(--card); }
 .wizInfo ul.grade li em { font-size: 12px; }
 .wizInfo p.verdict { font-size: 12.5px; }
+/* info slide in the setup panel */
+.wizSlide { display: flex; flex-direction: column; gap: 10px; padding-left: 12px; border-left: 3px solid var(--oxide-light); }
+.wizSlide p { margin: 0; }
+.wizSlide .sig { color: var(--muted); font-family: var(--f-mono); font-size: 13px; }

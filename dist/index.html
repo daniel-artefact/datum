@@ -230,6 +230,10 @@ p.verdict { font-weight: 500; } p.verdict.lv-good { color: #3FB950; } p.verdict.
 .wizInfo ul.grade li { padding: 5px 8px; grid-template-columns: 46px 1fr auto; background: var(--card); }
 .wizInfo ul.grade li em { font-size: 12px; }
 .wizInfo p.verdict { font-size: 12.5px; }
+/* info slide in the setup panel */
+.wizSlide { display: flex; flex-direction: column; gap: 10px; padding-left: 12px; border-left: 3px solid var(--oxide-light); }
+.wizSlide p { margin: 0; }
+.wizSlide .sig { color: var(--muted); font-family: var(--f-mono); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -2889,7 +2893,7 @@ function zoomTo(b) {
 function wizGo(i) {
   const cur = S.wiz != null ? WIZ[S.wiz] : null;
   if (cur && cur.leave) cur.leave();
-  S.wiz = i; $('wizMsg').textContent = '';
+  S.wiz = i; S.wizInfo = false; $('wizMsg').textContent = '';
   if (i != null && WIZ[i].enter) WIZ[i].enter();
   afterChange();
   const z = i != null && WIZ[i].zoom ? WIZ[i].zoom() : null;
@@ -2909,17 +2913,26 @@ function renderWiz() {
   if (!on) return;
   $('wizStrip').innerHTML = WIZ.map((_, i) => `<span class="${i < S.wiz ? 'done' : i === S.wiz ? 'now' : ''}"></span>`).join('');
   $('wizStrip').style.gridTemplateColumns = `repeat(${WIZ.length}, 1fr)`;
-  $('wizN').textContent = `${S.wiz + 1}/${WIZ.length}`; $('wizTitle').textContent = st.title;
-  $('wizText').innerHTML = `<p>${st.html ? st.html() : esc(st.text())}</p>` + (st.status ? st.status().map(t => `<p class="note">${esc(t)}</p>`).join('') : '')
-    + (st.info ? (([t, h]) => `<div class="wizInfo"><span class="mark">${esc(t)}</span>${h}</div>`)(st.info()) : '');
-  $('wizBack').style.visibility = S.wiz > 0 ? 'visible' : 'hidden';
+  $('wizN').textContent = `${S.wiz + 1}/${WIZ.length}`;
+  if (S.wizInfo && st.info) { // the info slide after a step: read it, then OK moves on
+    const [t, h] = st.info();
+    $('wizTitle').textContent = t; $('wizText').innerHTML = `<div class="wizSlide">${h}</div>`;
+    $('wizBack').style.visibility = 'visible';
+    $('wizOk').textContent = S.wiz + 1 < WIZ.length ? 'OK' : 'Start';
+  } else {
+    $('wizTitle').textContent = st.title;
+    $('wizText').innerHTML = `<p>${st.html ? st.html() : esc(st.text())}</p>` + (st.status ? st.status().map(t => `<p class="note">${esc(t)}</p>`).join('') : '');
+    $('wizBack').style.visibility = S.wiz > 0 ? 'visible' : 'hidden';
+    $('wizOk').textContent = 'OK';
+  }
   $('wizOk').disabled = false;
 }
 function wizOk() {
-  const st = WIZ[S.wiz], ok = st.can ? st.can() : true;
+  const st = WIZ[S.wiz], ok = S.wizInfo ? true : st.can ? st.can() : true;
   if (ok !== true) { $('wizMsg').textContent = ok; return; }
-  const next = () => { if (S.wiz + 1 < WIZ.length) wizGo(S.wiz + 1); else { S.setupDone = true; S.tab = 'fit'; wizGo(null); } };
-  if (st.after) st.after(next); else next(); // a step can show a note first; OK there moves on, Go back stays
+  if (st.info && !S.wizInfo) { S.wizInfo = true; $('wizMsg').textContent = ''; renderWiz(); return; } // first the step's info slide
+  S.wizInfo = false;
+  if (S.wiz + 1 < WIZ.length) wizGo(S.wiz + 1); else { S.setupDone = true; S.tab = 'fit'; wizGo(null); }
 }
 // a note over the photo between steps
 let noteThen = null;
@@ -2962,7 +2975,7 @@ function wizClick(x, y) {
   afterChange();
 }
 $('wizOk').onclick = wizOk;
-$('wizBack').onclick = () => { if (S.wiz > 0) wizGo(S.wiz - 1); };
+$('wizBack').onclick = () => { if (S.wizInfo) { S.wizInfo = false; renderWiz(); } else if (S.wiz > 0) wizGo(S.wiz - 1); }; // from a slide, back to its step
 $('wizRestart').onclick = () => { S.setupDone = false; wizGo(0); };
 for (const b of document.querySelectorAll('#tabbar button')) b.onclick = () => { S.tab = b.dataset.tab; S.view.mode = 'flat'; afterChange(); };
 $('chartSel').onchange = e => { S.chartId = e.target.value; afterChange(); };
