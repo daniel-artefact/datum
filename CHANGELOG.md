@@ -34,6 +34,12 @@ Rolling back = pasting the previous version's link.
   MKII 29 at 130-160, 27.5 at 130-170, manufacturer spec) or enter it; Place crown shows the steering axis and HT
   bottom with an A2C line from the axle's foot. Counts at +/-6 mm. Picking a fork fills the fork offset if empty.
 
+- Trace from the grey circles: outlines from 88% to 112% of each circle; the pair is picked together, sized by the
+  wheel sizes (within 6%), by the dark-to-light step across the outline (tread inside, background outside). Before,
+  a circle a little off could lock one tire onto grass or shadow (Daniel's MTB photo: rear 'not found').
+- Continue anyway: the second time OK is refused on the tire outlines, a Continue anyway button appears. A tire that
+  didn't trace then uses the outline through its five dots (shown as Check), and unplaced dots are taken as they are.
+
 ## v2 (released 2026-11-25: datum-v2.js?v=1795643586)
 - Tan sidewalls: once a dot on a wheel is placed by hand, the trace only looks within 5 mm of the outline through
   the dots and takes the edge nearest it. Before, the strong tan/black edge inside the tread pulled the trace up to

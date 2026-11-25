@@ -17,6 +17,9 @@ async def main():
         await pg.evaluate("() => { showStart(false); draw(); }"); await pg.screenshot(path='/tmp/mtb_rough.png')
         tr = await pg.evaluate("() => { S.roughC = [{ cx: 655, cy: 1160, r: 360 }, { cx: 1850, cy: 1180, r: 355 }]; wizOk(); return { rough: S.rough, q: S.wheels.map(wheelQuality), ok: $('wizOk').textContent }; }")
         print('after Trace from rough circles:', tr)
+        an = await pg.evaluate("() => { S.wheels[0] = null; S.blocked = true; afterChange(); wizOk(); const m1 = $('wizMsg').textContent; wizOk(); const btn = !!$('wizAnyway'); $('wizAnyway').click(); return { first: m1, button: btn, step: WIZ[S.wiz].k, slide: !!S.wizInfo, q: S.wheels.map(wheelQuality) }; }")
+        print('continue anyway:', an)
+        await pg.evaluate("() => { S.anyway = false; S.wizInfo = false; wizGo(0); S.rough = true; S.roughC = [{ cx: 655, cy: 1160, r: 360 }, { cx: 1850, cy: 1180, r: 355 }]; roughTrace(); }")
         await pg.screenshot(path='/tmp/mtb_traced.png')
         js = """([C, R, mixed]) => {
           for (const k of [0, 1]) {

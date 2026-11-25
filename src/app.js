@@ -102,7 +102,7 @@ const steer0 = () => { const b = STEER0[S.bike] || STEER0.road, a = S.bike === '
 const tireD = () => S.tireMode === 'actual' && S.tireAct > 0 ? S.tireAct : S.tireEst.D; // the front tire when the wheels differ
 const tireDk = k => tireD() - (mixedW() && k === rearIdx() ? BEAD[wheelF()] - BEAD[wheelR()] : 0);
 const tireTol = () => S.tireMode === 'actual' && S.tireAct > 0 ? (S.tireSel && S.tireSel !== 'manual' ? TOL.tireSize : TOL.tireAct) : (S.tireEst.src === 'rim' ? TOL.tireRim : TOL.tireDefault);
-const SAVE_KEYS = ['forkSel', 'forkA2C', 'bike', 'wheelF', 'wheelR', 'lockSA', 'lockSO', 'ringOff', 'boltOff', 'sideAsked', 'lockA', 'lockX', 'stOff', 'stA', 'lowerHS', 'base', 'tireSel', 'setupDone', 'geoShown', 'touched', 'chartId', 'customChart', 'steer', 'tirePlaced', 'tirePts', 'wheelInit', 'wheelsHand', 'geo', 'measures', 'bbMode', 'bbCircle', 'sideSet', 'wb', 'wbMode', 'sh', 'shMode', 'tireAct', 'tireMode', 'forkOffset', 'staMode', 'staManual', 'sadRef', 'dropTo', 'barD'];
+const SAVE_KEYS = ['anyway', 'forkSel', 'forkA2C', 'bike', 'wheelF', 'wheelR', 'lockSA', 'lockSO', 'ringOff', 'boltOff', 'sideAsked', 'lockA', 'lockX', 'stOff', 'stA', 'lowerHS', 'base', 'tireSel', 'setupDone', 'geoShown', 'touched', 'chartId', 'customChart', 'steer', 'tirePlaced', 'tirePts', 'wheelInit', 'wheelsHand', 'geo', 'measures', 'bbMode', 'bbCircle', 'sideSet', 'wb', 'wbMode', 'sh', 'shMode', 'tireAct', 'tireMode', 'forkOffset', 'staMode', 'staManual', 'sadRef', 'dropTo', 'barD'];
 // how far the located part sits out from the frame centerline: outer chainring about 48 mm, crank bolt about 70 mm (not shown to the user)
 const depthFor = () => S.side === 'drive' ? (S.ringOff > 0 ? S.ringOff : 50) : (S.boltOff > 0 ? S.boltOff : 70); // Daniel 2026-11-25: chainring about 50 mm off the centerline
 
@@ -144,7 +144,7 @@ async function loadImage(src, preset, bike) {
       for (const k of SAVE_KEYS) if (saved[k] !== undefined) S[k] = saved[k];
       if (bike) { S.bike = bike.bike; S.wheelF = bike.wf || '29'; S.wheelR = bike.wr || '29'; } // a type picked at upload wins over the saved one
       if (S.wheelsHand && S.tirePts) S.wheelInit = S.tirePts.map(ptsToEll);
-      if (S.wheelsHand && S.wheelInit) { S.wheels = S.wheelInit.map((e, k) => handTrace(k)); S.blocked = S.wheels.some(w => !w); S.rough = false; }
+      if (S.wheelsHand && S.wheelInit) { S.wheels = S.wheelInit.map((e, k) => handTrace(k) || (S.anyway ? dotsWheel(k) : null)); S.blocked = S.wheels.some(w => !w); S.rough = false; }
       for (const r of S.measures) S.uid = Math.max(S.uid, (parseInt(String(r.id).slice(1)) || 0) + 1);
     } else if (preset) {
       for (const k in preset.geo) { S.geo[k] = { p: preset.geo[k].slice(), depth: 0, src: 'set' }; S.touched[k] = true; } // the owner's own clicks
@@ -225,10 +225,58 @@ function roughDefault(W, H) {
   const r = Math.min(0.15 * W, 0.4 * H), cy = Math.min(0.6 * H, H - 1.1 * r);
   return [{ cx: W / 2 - 1.6 * r, cy, r }, { cx: W / 2 + 1.6 * r, cy, r }];
 }
+// Continue anyway on the tire outlines: a tire that didn't trace takes the outline through its five dots instead (shown
+// as Check, never Clean), and any dots not yet placed are taken as they are
+function dotsWheel(k) {
+  const e = ptsToEll(S.tirePts[k]), pts = [];
+  for (let i = 0; i < 96; i++) { const t = 2 * Math.PI * i / 96, r = Core.ellRadius(e, t); pts.push([e.cx + r * Math.cos(t), e.cy + r * Math.sin(t)]); }
+  return { ell: { ...e }, pts, rms: 0, coverage: 1, fromDots: true };
+}
+function continueAnyway() {
+  for (const k of [0, 1]) if (!S.wheels[k] || wheelQuality(S.wheels[k]) === 'none') S.wheels[k] = dotsWheel(k);
+  S.tirePlaced = S.tirePlaced.map(r => r.map(() => true)); S.rough = false; S.anyway = true; S.wheelsHand = true;
+  S.blocked = false; S.tiltKey = ''; S.wheelTries = 0; $('wizMsg').textContent = '';
+  afterChange(); S.wizForce = true; wizOk();
+}
 // the rough pass is done: trace near each circle (searching 13% either side, like the automatic guess), then the dots
 function roughTrace() {
   const { gray, W, H } = S.img;
-  S.wheels = S.roughC.map(c => Core.fitWheel(gray, W, H, { cx: c.cx, cy: c.cy, r: c.r }, 0.13, 0, knobPx({ a: c.r, b: c.r })));
+  // Each circle is only rough, so trace outlines from 88% to 112% of it. Grass, shadow or a bead edge can also trace
+  // cleanly, so the pair is picked together: the two tires must come out the sizes the wheel sizes say (within 6%,
+  // leaving room for the camera angle), and among those pairs the cleanest wins.
+  const cand = S.roughC.map(c => {
+    const out = [];
+    for (let kr = 0.88; kr <= 1.121; kr += 0.02) {
+      const f = Core.fitWheel(gray, W, H, { cx: c.cx, cy: c.cy, a: c.r * kr, b: c.r * kr, phi: 0 }, null, 0, knobPx({ a: c.r, b: c.r }));
+      if (f && f.coverage >= 0.4 && !out.some(g => Math.abs(g.ell.a - f.ell.a) < 1.5 && Math.abs(g.ell.cx - f.ell.cx) < 1.5)) out.push(f);
+    }
+    return out;
+  });
+  const size = f => (f.ell.a + f.ell.b) / 2, want = tireDk(0) / tireDk(1), m = 2 * Math.max(...S.roughC.map(c => c.r)) / TR().od;
+  const sc = f => f.coverage - f.rms / m / TR().yellowRms;
+  // The tire's outer edge is where the dark tread ends: a band just inside the outline is tire, a band just outside is
+  // background. Grass or shadow past the tire, or the bead inside it, has background (or tire) on both sides, so the
+  // step across the outline is what picks the tire. Bands 4-14 mm either side, medians round the wheel.
+  const g = S.img.gray, step = f => {
+    const e = f.ell, d1 = 4 * m, d2 = 14 * m, ins = [], outs = [];
+    for (let i = 0; i < 120; i++) {
+      const t = 2 * Math.PI * i / 120, r = Core.ellRadius(e, t), c = Math.cos(t), sn = Math.sin(t);
+      for (const [d, arr] of [[-d2, ins], [-(d1 + d2) / 2, ins], [-d1, ins], [d1, outs], [(d1 + d2) / 2, outs], [d2, outs]]) {
+        const x = Math.round(e.cx + (r + d) * c), y = Math.round(e.cy + (r + d) * sn);
+        if (x >= 0 && y >= 0 && x < W && y < H) arr.push(g[y * W + x]);
+      }
+    }
+    return ins.length && outs.length ? Math.abs(Core.median(outs) - Core.median(ins)) / 255 : 0;
+  };
+  for (const c of cand) for (const f of c) f.step = step(f);
+  let best = null;
+  for (const f0 of cand[0]) for (const f1 of cand[1]) {
+    const dev = Math.abs(Math.log(size(f0) / size(f1) / want));
+    if (dev > 0.06) continue;
+    const v = 2 * (f0.step + f1.step) + 0.3 * (sc(f0) + sc(f1)) - 2 * dev;
+    if (!best || v > best.v) best = { v, w: [f0, f1] };
+  }
+  S.wheels = best ? best.w : cand.map(c => c.length ? c.reduce((a, b) => sc(b) > sc(a) ? b : a) : null);
   S.wheelInit = S.roughC.map((c, k) => S.wheels[k] ? { ...S.wheels[k].ell } : { cx: c.cx, cy: c.cy, a: c.r, b: c.r, phi: 0 });
   S.tirePts = S.wheelInit.map(ellPts);
   S.tirePlaced = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]].map(r => r.map(() => false));
@@ -303,7 +351,7 @@ function handTrace(k) {
 function retraceWheel(k) {
   const { gray, W, H } = S.img;
   S.wheelInit[k] = ptsToEll(S.tirePts[k]);
-  S.wheels[k] = handTrace(k);
+  S.wheels[k] = handTrace(k) || (S.anyway ? dotsWheel(k) : null);
   S.wheelsHand = true;
   // everything found from the old wheels is found again: BB, seat tube, and any point not placed by hand
   for (const g of ['st', 'sd', 'sr', 'sn', 'bar']) if (S.geo[g] && S.geo[g].src !== 'set') delete S.geo[g];
@@ -318,7 +366,7 @@ function retraceWheel(k) {
 // The yardstick is a 700x30 tire, 682 mm across: good enough to grade a trace, never used for a measurement.
 const mmPerPx = () => { const d = S.wheels.filter(Boolean).map(w => 2 * Math.max(w.ell.a, w.ell.b)); return d.length ? TR().od / Math.max(...d) : 1; };
 const rmsMm = w => w.rms * mmPerPx();
-const wheelQuality = w => !w ? 'none' : (rmsMm(w) <= TR().greenRms && w.coverage >= 0.45 ? 'clean' : rmsMm(w) <= TR().yellowRms && w.coverage >= 0.3 ? 'check' : 'none');
+const wheelQuality = w => !w ? 'none' : w.fromDots ? 'check' : (rmsMm(w) <= TR().greenRms && w.coverage >= 0.45 ? 'clean' : rmsMm(w) <= TR().yellowRms && w.coverage >= 0.3 ? 'check' : 'none');
 
 // ---------- pipeline ----------
 function recompute() {
@@ -1860,7 +1908,7 @@ function zoomTo(b) {
 function wizGo(i) {
   const cur = S.wiz != null ? WIZ[S.wiz] : null;
   if (cur && cur.leave) cur.leave();
-  S.wiz = i; S.wizInfo = false; $('wizMsg').textContent = '';
+  S.wiz = i; S.wizInfo = false; S.wheelTries = 0; $('wizMsg').textContent = '';
   if (i != null && WIZ[i].enter) WIZ[i].enter();
   afterChange();
   const z = i != null && WIZ[i].zoom ? WIZ[i].zoom() : null;
@@ -1896,8 +1944,17 @@ function renderWiz() {
 }
 function wizOk() {
   if (WIZ[S.wiz] && WIZ[S.wiz].k === 'wheels' && S.rough && !S.wizInfo) { roughTrace(); return; }
-  const st = WIZ[S.wiz], ok = S.wizInfo ? true : st.can ? st.can() : true;
-  if (ok !== true) { $('wizMsg').textContent = ok; return; }
+  const st = WIZ[S.wiz], ok = S.wizInfo || S.wizForce ? true : st.can ? st.can() : true;
+  S.wizForce = false;
+  if (ok !== true) {
+    // Daniel 2026-11-25: the second time OK is refused on the tire outlines, offer to go on with the dots as they are
+    if (st.k === 'wheels' && (S.wheelTries = (S.wheelTries || 0) + 1) >= 2) {
+      $('wizMsg').innerHTML = `${esc(ok)} <button class="btn small" id="wizAnyway">Continue anyway</button>`;
+      $('wizAnyway').onclick = continueAnyway;
+    } else $('wizMsg').textContent = ok;
+    return;
+  }
+  if (st.k === 'wheels') S.wheelTries = 0;
   if (st.info && !S.wizInfo) { S.wizInfo = true; $('wizMsg').textContent = ''; renderWiz(); return; } // first the step's info slide
   S.wizInfo = false;
   const finish = () => { S.setupDone = true; S.tab = 'fit'; wizGo(null); };
