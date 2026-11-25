@@ -1488,7 +1488,9 @@ function zoomAt(f, sx, sy) {
 function sizeCanvas() {
   const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
   cv.width = Math.max(1, Math.round(r.width * d)); cv.height = Math.max(1, Math.round(r.height * d));
-  draw();
+  // the first time the photo area gets a real size (a host page can lay out after the app starts), fit the photo to it
+  const was = S.cvSize || [0, 0]; S.cvSize = [r.width, r.height];
+  if (S.img && (was[0] < 50 || was[1] < 50) && r.width >= 50 && r.height >= 50) fitView(); else draw();
 }
 
 // ---------- drawing ----------
