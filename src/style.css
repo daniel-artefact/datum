@@ -210,3 +210,12 @@ ul.grade li em { grid-column: 2 / 4; font-style: normal; color: var(--muted); fo
 p.verdict { font-weight: 500; } p.verdict.lv-good { color: #3FB950; } p.verdict.lv-ok { color: #F2C230; } p.verdict.lv-poor { color: #F04438; }
 #wizText strong { color: var(--vellum); font-weight: 600; }
 @media (max-width: 700px) { #note { align-items: flex-start; padding: 16px; } }
+/* info bar inside a setup step: smaller than the step text */
+.wizInfo { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding: 10px 12px; background: var(--ground); border-left: 3px solid var(--oxide-light); font-size: 12.5px; line-height: 1.45; }
+.wizInfo .mark { font: 500 10.5px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--oxide-light); }
+.wizInfo p { margin: 0; color: var(--body); font-size: 12.5px; }
+.wizInfo .sig { color: var(--muted); font-family: var(--f-mono); font-size: 12px; }
+.wizInfo ul.grade { gap: 4px; margin: 2px 0; }
+.wizInfo ul.grade li { padding: 5px 8px; grid-template-columns: 46px 1fr auto; background: var(--card); }
+.wizInfo ul.grade li em { font-size: 12px; }
+.wizInfo p.verdict { font-size: 12.5px; }

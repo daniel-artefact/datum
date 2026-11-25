@@ -1683,13 +1683,12 @@ const WIZ = [
       if (left) return `Place all ten points first: ${left} still to place.`;
       return S.wheels.every(w => wheelQuality(w) !== 'none') ? true : 'Both tire edges have to be traced first. If they can\'t be, the photo needs a plainer background.'; },
     zoom: () => null,
-    after: next => showNote({ mark: 'Photo check', title: 'Your photo', ok: 'OK', back: 'Go back', onOk: next, html: photoReport() }) },
+    info: () => ['Photo check', photoReport()] },
   { k: 'bb', title: 'Bottom bracket', show: ['photoPanel', 'bbPanel'],
     text: () => S.side === 'drive'
       ? 'The chainring locates the bottom bracket. Use the circle to find the center of the chainring: line it up with the outer edge of the chainring all the way round. Drag the circle or its edge handle, or click to move it there. From the center of the chainring, the perspective correction places the bottom bracket.'
       : 'The crank bolt locates the bottom bracket. Use the circle to find its center: line it up with the crank bolt, or the hole at the end of the spindle, all the way round. Drag the circle or its edge handle, or click to move it there. From there, the perspective correction places the bottom bracket.',
-    after: next => showNote({ mark: 'Bottom bracket', title: 'Check it carefully', ok: 'OK', back: 'Go back', onOk: next,
-      html: `<p>This step is very important. Take extra care to get it right: everything in the fit and the geometry is measured from the bottom bracket.</p><p>It's normal for the BB not to sit in the center of the ${S.side === 'drive' ? 'chainring' : 'crank bolt'}. The ${S.side === 'drive' ? 'chainring' : 'crank bolt'} sits about ${fmt(S.bbDepth || (S.side === 'drive' ? 50 : 70), 0)} mm out from the middle of the frame, so on an angled photo it looks shifted. DATUM corrects the BB's position for this parallax.</p>` }),
+    info: () => ['Check it carefully', `<p>This step is very important. Take extra care to get it right: everything in the fit and the geometry is measured from the bottom bracket.</p><p>It's normal for the BB not to sit in the center of the ${S.side === 'drive' ? 'chainring' : 'crank bolt'}. The ${S.side === 'drive' ? 'chainring' : 'crank bolt'} sits about ${fmt(S.bbDepth || (S.side === 'drive' ? 50 : 70), 0)} mm out from the middle of the frame, so on an angled photo it looks shifted. DATUM corrects the BB's position for this parallax.</p>`],
     enter: () => { S.view.mode = 'flat'; },
     can: () => S.geo.bb ? true : 'Place the circle first.',
     zoom: () => { const b = S.bbCircle || S.crank; return b ? [[b.cx - 1.8 * b.r, b.cy - 1.8 * b.r], [b.cx + 1.8 * b.r, b.cy + 1.8 * b.r]] : null; } },
@@ -1697,8 +1696,7 @@ const WIZ = [
     html: () => 'DATUM needs a real-world reference to set the scale. <strong>It\'s only as accurate as your physical measurement</strong>, and it affects the accuracy of the entire model.</p>'
       + '<p>Wheelbase is the most accurate. Tire size can be used if you don\'t have an easy way of measuring; keep in mind tires can vary 2-3% from their stated size. An accurate saddle height measurement is good to know regardless. Entering all three improves the accuracy of the model.',
     text: () => '',
-    after: next => showNote({ mark: 'Last note', title: 'Before you start', ok: 'Start', back: 'Go back', onOk: next,
-      html: '<p>DATUM is only as accurate as the information you put in. With good inputs, DATUM can confidently reach &plusmn;3 mm.</p><p>Finally, keep in mind that when translating a fit to real life, it will never be an exact match. Expect &plusmn;10 mm in the real world. Always leave room to adjust and tweak as your body changes: this is the key to a good custom bike.</p><p class="sig">- Daniel</p>' }),
+    info: () => ['Before you start', '<p>DATUM is only as accurate as the information you put in. With good inputs, DATUM can confidently reach &plusmn;3 mm.</p><p>Finally, keep in mind that when translating a fit to real life, it will never be an exact match. Expect &plusmn;10 mm in the real world. Always leave room to adjust and tweak as your body changes: this is the key to a good custom bike.</p><p class="sig">- Daniel</p>'],
     enter: () => { S.view.mode = 'flat'; },
     can: () => S.wb > 0 || S.tireAct > 0 ? true : 'Enter the wheelbase, or pick the tire size.' },
 ];
@@ -1733,7 +1731,8 @@ function renderWiz() {
   $('wizStrip').innerHTML = WIZ.map((_, i) => `<span class="${i < S.wiz ? 'done' : i === S.wiz ? 'now' : ''}"></span>`).join('');
   $('wizStrip').style.gridTemplateColumns = `repeat(${WIZ.length}, 1fr)`;
   $('wizN').textContent = `${S.wiz + 1}/${WIZ.length}`; $('wizTitle').textContent = st.title;
-  $('wizText').innerHTML = `<p>${st.html ? st.html() : esc(st.text())}</p>` + (st.status ? st.status().map(t => `<p class="note">${esc(t)}</p>`).join('') : '');
+  $('wizText').innerHTML = `<p>${st.html ? st.html() : esc(st.text())}</p>` + (st.status ? st.status().map(t => `<p class="note">${esc(t)}</p>`).join('') : '')
+    + (st.info ? (([t, h]) => `<div class="wizInfo"><span class="mark">${esc(t)}</span>${h}</div>`)(st.info()) : '');
   $('wizBack').style.visibility = S.wiz > 0 ? 'visible' : 'hidden';
   $('wizOk').disabled = false;
 }

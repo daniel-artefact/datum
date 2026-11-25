@@ -14,13 +14,10 @@ async def run(b, nm, vp, mobile):
     async def shot(k): await pg.screenshot(path=str(out / f'flow-{nm}-{k}.png'))
     await shot('1-start')
     await click('#startGood'); await pg.wait_for_timeout(8000); await shot('2-tires'); print(nm, 'tires', await state())
-    await click('#wizOk'); await shot('3-photo-check'); print(nm, 'after OK', await state())
-    await click('#noteOk'); await shot('4-bb'); print(nm, 'note OK', await state())
-    await click('#wizOk'); await shot('5-bb-note'); print(nm, 'after OK', await state())
-    await click('#noteOk'); await shot('6-scale'); print(nm, 'note OK', await state())
+    await click('#wizOk'); await shot('3-bb'); print(nm, 'after OK', await state())
+    await click('#wizOk'); await shot('4-scale'); print(nm, 'after OK', await state())
     await pg.evaluate(f"() => {{ const i = {R}.querySelector('#wb'); i.value = '1007.7'; i.dispatchEvent(new Event('change')); }}"); await pg.wait_for_timeout(500)
-    await click('#wizOk'); await shot('7-final-note'); print(nm, 'after OK', await state())
-    await click('#noteOk'); await shot('8-fit'); print(nm, 'start', await state())
+    await click('#wizOk'); await shot('5-fit'); print(nm, 'after OK', await state())
     print(nm, 'errors', errs); await pg.close()
 async def main():
     async with async_playwright() as p:
