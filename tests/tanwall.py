@@ -3,6 +3,7 @@ import asyncio, subprocess, sys, time, shutil, pathlib, json
 from playwright.async_api import async_playwright
 T = pathlib.Path(__file__).resolve().parent; site = T / 'site'
 shutil.copy(T.parent / 'dist' / 'index.html', site / 'standalone.html')
+for f in (T / 'photos').glob('*'): shutil.copy(f, site / f.name)  # Daniel's test photos, kept out of git
 srv = subprocess.Popen([sys.executable, '-m', 'http.server', '8017', '--directory', str(site)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1)
 async def main():
     async with async_playwright() as p:

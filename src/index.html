@@ -79,6 +79,10 @@ __CSS__</style>
       <div class="sline"><span class="lab">Photo shows the</span>
         <span class="seg" role="group" aria-label="Side"><button id="sideDrive" aria-pressed="true">Drive side</button><button id="sideNds" aria-pressed="false">Non-drive side</button></span>
         <span id="sideChip"></span></div>
+      <div class="sline"><span class="lab">Bike</span>
+        <span class="seg" role="group" aria-label="Bike type"><button id="bkRoad" aria-pressed="true">Road</button><button id="bkGravel" aria-pressed="false">Gravel</button><button id="bkMtb" aria-pressed="false">Mountain</button></span></div>
+      <div class="sline" id="wheelsRow"><span class="lab">Wheels</span>
+        <span class="seg" role="group" aria-label="Wheel sizes"><button id="bkSame" aria-pressed="true">Same size</button><button id="bkMixed" aria-pressed="false">29 front, 27.5 rear</button></span></div>
       <div id="wheelNote"></div>
       <div class="row"><button class="btn small" id="redoTires">Redo tires</button><button class="btn small" id="redoBB">Redo BB</button></div>
     </div>
@@ -168,6 +172,28 @@ __CSS__</style>
     </div>
     <p class="small">Your photo stays in your browser and is never uploaded.</p>
     <button class="startClose" id="startClose">Back to my photo</button>
+  </div>
+</div>
+<div id="bikeAsk" role="dialog" aria-modal="true" aria-labelledby="bikeTitle">
+  <div class="startCard">
+    <span class="mark">Before tracing</span>
+    <h2 id="bikeTitle">What kind of bike?</h2>
+    <div id="bikeStep1">
+      <p>Gravel and mountain tires have knobs, so DATUM traces the knob tips and allows a little more spread.</p>
+      <div class="startOpts">
+        <button class="btn primary" id="bikeRoad">Road</button>
+        <button class="btn primary" id="bikeGravel">Gravel</button>
+        <button class="btn primary" id="bikeMtb">Mountain</button>
+      </div>
+    </div>
+    <div id="bikeStep2" style="display:none">
+      <p>Are both wheels the same size?</p>
+      <div class="startOpts">
+        <button class="btn primary" id="bikeSame">Same size</button>
+        <button class="btn primary" id="bikeMixed">Mixed: 29 front, 27.5 rear</button>
+      </div>
+    </div>
+    <button class="startClose" id="bikeCancel">Cancel</button>
   </div>
 </div>
 <div id="note" role="dialog" aria-modal="true" aria-labelledby="noteTitle">

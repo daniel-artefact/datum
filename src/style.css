@@ -193,6 +193,8 @@ body { position: relative; }
 .startClose:hover { color: var(--vellum); }
 @media (max-width: 700px) { #start { align-items: flex-start; padding: 16px; } .startCard { padding: 24px 20px 18px; } .startCard h2 { font-size: 28px; } }
 /* notes between setup steps (same card as the start screen) */
+#bikeAsk { position: absolute; inset: 0; z-index: 44; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(22,21,19,.72); }
+@media (max-width: 700px) { #bikeAsk { align-items: flex-start; padding: 16px; } }
 #note { position: absolute; inset: 0; z-index: 45; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(22,21,19,.72); }
 #noteBody { display: flex; flex-direction: column; gap: 10px; }
 #noteBody p, .startCard p.small { margin: 0; color: var(--body); font-size: 14.5px; }

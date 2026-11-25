@@ -39,6 +39,20 @@ const CHARTS = [
 ];
 const TIRES = [['700x25', 672], ['700x28', 678], ['700x30', 682], ['700x32', 686], ['700x35', 692], ['700x38', 698], ['700x40', 702], ['700x45', 712], ['700x50', 722],
   ['650bx47', 678], ['650bx50', 684]];
+// Daniel 2026-11-25: DATUM is for every bike. Mountain sizes use the same rule as the list above: OD = bead + 2 x width
+const TIRES_MTB = [['29x2.2', 734], ['29x2.3', 739], ['29x2.4', 744], ['29x2.5', 749], ['29x2.6', 754],
+  ['27.5x2.3', 701], ['27.5x2.4', 706], ['27.5x2.5', 711], ['27.5x2.6', 716]];
+const MULLET_DROP = 38; // mixed wheels: the rear is a 27.5 (584 bead) with the front's tire width, 38 mm smaller than the 29 (622)
+// Bike type, picked at upload. Knobby tires trace along the knob tips, so the trace scatters more and the limits loosen:
+// od is the yardstick tire for judging traces in mm, knob the tread depth, band how far a placed dot is trusted.
+const BIKES = {
+  road: { name: 'Road', od: 682, greenRms: 0.75, yellowRms: 1.5, greenDot: 2.5, yellowDot: 6, band: 5, knob: 0 },
+  gravel: { name: 'Gravel', od: 702, greenRms: 1.25, yellowRms: 2.5, greenDot: 4, yellowDot: 8, band: 6, knob: 2.5 },
+  mtb: { name: 'Mountain', od: 744, greenRms: 2.25, yellowRms: 4, greenDot: 6, yellowDot: 10, band: 8, knob: 5 },
+};
+const TR = () => BIKES[S.bike] || BIKES.road;
+const tireList = () => S.bike === 'mtb' ? (S.mixed ? TIRES_MTB.filter(t => t[0].startsWith('29')) : TIRES_MTB) : TIRES;
+const tireDefault = () => S.bike === 'mtb' ? 744 : S.bike === 'gravel' ? 702 : 686;
 const chartRef = () => S.chartId === 'custom' ? S.customChart : (CHARTS.find(ch => ch.id === S.chartId) || {}).v || null;
 // Saddle, bar and frame points are reconstructed from the owner's own clicks
 const EXAMPLES = {
@@ -69,14 +83,15 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const frontRight = () => S.side === 'drive';
 // tolerances, mm: measured with a tape vs estimated from the rim
 const TOL = { tireSize: 5, tireAct: 2, tireRim: 4, tireDefault: 10, wb: 2, sh: 3 };
-const tireD = () => S.tireMode === 'actual' && S.tireAct > 0 ? S.tireAct : S.tireEst.D;
+const tireD = () => S.tireMode === 'actual' && S.tireAct > 0 ? S.tireAct : S.tireEst.D; // the front tire when the wheels differ
+const tireDk = k => tireD() - (S.bike === 'mtb' && S.mixed && k === rearIdx() ? MULLET_DROP : 0);
 const tireTol = () => S.tireMode === 'actual' && S.tireAct > 0 ? (S.tireSel && S.tireSel !== 'manual' ? TOL.tireSize : TOL.tireAct) : (S.tireEst.src === 'rim' ? TOL.tireRim : TOL.tireDefault);
-const SAVE_KEYS = ['ringOff', 'boltOff', 'sideAsked', 'lockA', 'lockX', 'stOff', 'stA', 'lowerHS', 'base', 'tireSel', 'setupDone', 'geoShown', 'touched', 'chartId', 'customChart', 'steer', 'tirePlaced', 'tirePts', 'wheelInit', 'wheelsHand', 'geo', 'measures', 'bbMode', 'bbCircle', 'sideSet', 'wb', 'wbMode', 'sh', 'shMode', 'tireAct', 'tireMode', 'forkOffset', 'staMode', 'staManual', 'sadRef', 'dropTo', 'barD'];
+const SAVE_KEYS = ['bike', 'mixed', 'ringOff', 'boltOff', 'sideAsked', 'lockA', 'lockX', 'stOff', 'stA', 'lowerHS', 'base', 'tireSel', 'setupDone', 'geoShown', 'touched', 'chartId', 'customChart', 'steer', 'tirePlaced', 'tirePts', 'wheelInit', 'wheelsHand', 'geo', 'measures', 'bbMode', 'bbCircle', 'sideSet', 'wb', 'wbMode', 'sh', 'shMode', 'tireAct', 'tireMode', 'forkOffset', 'staMode', 'staManual', 'sadRef', 'dropTo', 'barD'];
 // how far the located part sits out from the frame centerline: outer chainring about 48 mm, crank bolt about 70 mm (not shown to the user)
 const depthFor = () => S.side === 'drive' ? (S.ringOff > 0 ? S.ringOff : 50) : (S.boltOff > 0 ? S.boltOff : 70); // Daniel 2026-11-25: chainring about 50 mm off the centerline
 
 // ---------- loading ----------
-async function loadImage(src, preset) {
+async function loadImage(src, preset, bike) {
   $('busy').style.display = 'flex';
   await new Promise(r => setTimeout(r, 20));
   try {
@@ -97,7 +112,8 @@ async function loadImage(src, preset) {
     Object.assign(S, { f35: guess ? Math.round(guess) : null, focalMode: 'auto', wheels: [null, null], inits: [null, null], tilt: null, tiltKey: '', rect: null,
       refs: [], geo: {}, measures: [], tool: null, pending: null, adjust: false, flat: null, flatKey: '', fg: null, fgKey: '', crankKey: '', mc: null,
       tireSel: '', shPlace: false, setupDone: false, geoShown: false, sideAsked: false, hist: null, base: {}, touched: {}, chartId: '', customChart: {}, tab: 'fit', steer: null, wiz: null, bbMode: 'auto', bbDepth: 48, bbCircle: null, bbAdjust: false, side: 'drive', sideSet: null, sideAuto: null, sideKey: '', rimKey: '', tireEst: { D: 686, src: 'default' },
-      staMode: 'auto', staManual: 73.5, wb: null, wbMode: 'est', sh: null, shMode: 'est', tireAct: null, tireMode: 'est', forkOffset: null });
+      staMode: 'auto', staManual: 73.5, bike: (bike && bike.bike) || 'road', mixed: !!(bike && bike.mixed), wb: null, wbMode: 'est', sh: null, shMode: 'est', tireAct: null, tireMode: 'est', forkOffset: null });
+    S.tireEst = { D: tireDefault(), src: 'default' };
     $('focalNote').textContent = S.exif
       ? `The file says ${fmt(guess, 0)} mm${S.exif.focal35 ? ' (35 mm-equivalent)' : ''}. That is used as a starting guess, since crops and smaller sensors change the effective value.`
       : 'No focal length in the file. A long lens leaves little perspective to measure, and then this setting hardly matters.';
@@ -109,6 +125,7 @@ async function loadImage(src, preset) {
     try { saved = JSON.parse(localStorage.getItem(S.storeKey) || 'null'); } catch (e) {}
     if (saved && saved.geo) {
       for (const k of SAVE_KEYS) if (saved[k] !== undefined) S[k] = saved[k];
+      if (bike) { S.bike = bike.bike; S.mixed = !!bike.mixed; } // a type picked at upload wins over the saved one
       if (S.wheelsHand && S.tirePts) S.wheelInit = S.tirePts.map(ptsToEll);
       if (S.wheelsHand && S.wheelInit) { S.wheels = S.wheelInit.map((e, k) => handTrace(k)); S.blocked = S.wheels.some(w => !w); }
       for (const r of S.measures) S.uid = Math.max(S.uid, (parseInt(String(r.id).slice(1)) || 0) + 1);
@@ -139,7 +156,9 @@ function syncInputs() {
   $('f35').value = S.f35 || ''; $('focalMode').value = S.focalMode; $('f35').disabled = S.focalMode !== 'fixed';
   $('wb').value = S.wb || ''; $('sh').value = S.sh || ''; $('forkOff').value = S.forkOffset || '';
   const sel = $('tireSel');
-  if (!sel.options.length) sel.innerHTML = '<option value="">Pick a size</option>' + TIRES.map(([n, od]) => `<option value="${n}">${n}: OD ${od}</option>`).join('');
+  const list = tireList(), lkey = S.bike + (S.mixed ? 'm' : '');
+  if (sel.dataset.list !== lkey) { sel.dataset.list = lkey; sel.innerHTML = '<option value="">' + (S.bike === 'mtb' && S.mixed ? 'Front tire size' : 'Pick a size') + '</option>' + list.map(([n, od]) => `<option value="${n}">${n}: OD ${od}</option>`).join(''); }
+  if (S.tireSel && S.tireSel !== 'manual' && !list.some(t => t[0] === S.tireSel)) { S.tireSel = ''; S.tireAct = null; }
   if (S.tireAct > 0 && !S.tireSel) S.tireSel = 'manual'; // saved before the size list existed
   if (S.tireSel && S.tireSel !== 'manual' && !(S.tireAct > 0)) S.tireSel = '';
   sel.value = S.tireSel && S.tireSel !== 'manual' ? S.tireSel : '';
@@ -147,6 +166,9 @@ function syncInputs() {
   $('tireD').value = S.tireSel === 'manual' && S.tireAct ? S.tireAct : '';
   $('tireManualRow').style.display = S.tireSel === 'manual' ? '' : 'none';
   for (const b of document.querySelectorAll('.sref .seg button')) b.setAttribute('aria-pressed', String(S[b.dataset.ref + 'Mode'] === b.dataset.m));
+  for (const [id, b] of [['bkRoad', 'road'], ['bkGravel', 'gravel'], ['bkMtb', 'mtb']]) $(id).setAttribute('aria-pressed', String((S.bike || 'road') === b));
+  $('wheelsRow').style.display = S.bike === 'mtb' ? '' : 'none';
+  $('bkSame').setAttribute('aria-pressed', String(!S.mixed)); $('bkMixed').setAttribute('aria-pressed', String(!!S.mixed));
   $('sideDrive').setAttribute('aria-pressed', String(S.side === 'drive')); $('sideNds').setAttribute('aria-pressed', String(S.side === 'nds'));
   $('staManual').value = S.sta ? +S.sta.angle.toFixed(1) : S.staManual;
   $('barD').value = S.barD;
@@ -157,7 +179,7 @@ function syncInputs() {
 function findWheels() {
   const { gray, W, H } = S.img;
   const det = Core.detectWheels(gray, W, H);
-  S.wheels = det ? det.map(d => Core.fitWheel(gray, W, H, d)) : [null, null];
+  S.wheels = det ? det.map(d => Core.fitWheel(gray, W, H, d, null, 0, knobPx({ a: d.r, b: d.r }))) : [null, null];
   S.wheelInit = [0, 1].map(k => S.wheels[k] ? { cx: S.wheels[k].ell.cx, cy: S.wheels[k].ell.cy, a: S.wheels[k].ell.a, b: S.wheels[k].ell.b, phi: S.wheels[k].ell.phi }
     : det ? { cx: det[k].cx, cy: det[k].cy, a: det[k].r, b: det[k].r, phi: 0 } : { cx: W * (k ? 0.7 : 0.3), cy: H * 0.62, a: W * 0.13, b: W * 0.13, phi: 0 });
   S.tirePts = S.wheelInit.map(ellPts);
@@ -176,7 +198,7 @@ function autoCheck() {
   if (S.wheels.some(w => !w)) return { ok: false, why: ['a tire was not found'] };
   S.wheels.forEach((w, k) => {
     const nm = k === rearIdx() ? 'rear' : 'front';
-    if (rmsMm(w) > TRACE.greenRms) why.push(`${nm} trace not clean (off by ${fmt(rmsMm(w), 2)} mm on average)`);
+    if (rmsMm(w) > TR().greenRms) why.push(`${nm} trace not clean (off by ${fmt(rmsMm(w), 2)} mm on average)`);
     if (w.coverage < 0.5) why.push(`${nm} tire only ${Math.round(w.coverage * 100)}% traced`);
   });
   const g = gradePhoto(), st = g && g.items.find(i => i.label === 'Front wheel straight');
@@ -201,7 +223,7 @@ function tirePtColor(k, i) {
   const w = S.wheels[k];
   if (!w) return '#F04438';
   const m = mmPerPx(), d = Math.abs(Core.ellDist(w.ell, S.tirePts[k][i][0], S.tirePts[k][i][1])) * m, r = w.rms * m;
-  return d <= TRACE.greenDot && r <= TRACE.greenRms ? '#3FB950' : d <= TRACE.yellowDot && r <= TRACE.yellowRms ? '#F2C230' : '#F04438';
+  return d <= TR().greenDot && r <= TR().greenRms ? '#3FB950' : d <= TR().yellowDot && r <= TR().yellowRms ? '#F2C230' : '#F04438';
 }
 function flashTirePt(k, i) {
   S.flash = { k, i, t0: performance.now() };
@@ -221,13 +243,15 @@ function splinePath(P, map) {
   }
   return out;
 }
-// Daniel 2026-11-25: a dot a person placed is good to about 5 mm. Once any dot on a wheel is placed, the trace only
-// looks within 5 mm of the outline through the dots, so a tan sidewall just inside the tread can't pull it off.
-const HAND_TOL_MM = 5;
+// Daniel 2026-11-25: a dot a person placed is good to about 5 mm (road; more on knobby tires, see BIKES). Once any dot on
+// a wheel is placed, the trace only looks that close to the outline through the dots, so a tan sidewall just inside
+// the tread can't pull it off.
+const pxPerMmAt = e => 2 * Math.max(e.a, e.b) / TR().od;
+const knobPx = e => TR().knob * pxPerMmAt(e);
 function handTrace(k) {
   const e = S.wheelInit[k], placed = S.tirePlaced && S.tirePlaced[k] && S.tirePlaced[k].some(Boolean);
-  const tol = placed ? HAND_TOL_MM * 2 * Math.max(e.a, e.b) / TRACE.tireMm : 0;
-  return Core.fitWheelHand(S.img.gray, S.img.W, S.img.H, e, tol);
+  const tol = placed ? TR().band * pxPerMmAt(e) : 0;
+  return Core.fitWheelHand(S.img.gray, S.img.W, S.img.H, e, tol, knobPx(e));
 }
 function retraceWheel(k) {
   const { gray, W, H } = S.img;
@@ -245,10 +269,9 @@ function retraceWheel(k) {
 // how cleanly a tire edge was traced: rms of the fit in px and the share of the edge found
 // Trace quality in millimeters, not pixels, so a sharper photo isn't judged harder (Daniel 2026-11-25).
 // The yardstick is a 700x30 tire, 682 mm across: good enough to grade a trace, never used for a measurement.
-const TRACE = { tireMm: 682, greenRms: 0.75, yellowRms: 1.5, greenDot: 2.5, yellowDot: 6 };
-const mmPerPx = () => { const d = S.wheels.filter(Boolean).map(w => 2 * Math.max(w.ell.a, w.ell.b)); return d.length ? TRACE.tireMm / Math.max(...d) : 1; };
+const mmPerPx = () => { const d = S.wheels.filter(Boolean).map(w => 2 * Math.max(w.ell.a, w.ell.b)); return d.length ? TR().od / Math.max(...d) : 1; };
 const rmsMm = w => w.rms * mmPerPx();
-const wheelQuality = w => !w ? 'none' : (rmsMm(w) <= TRACE.greenRms && w.coverage >= 0.45 ? 'clean' : rmsMm(w) <= TRACE.yellowRms && w.coverage >= 0.3 ? 'check' : 'none');
+const wheelQuality = w => !w ? 'none' : (rmsMm(w) <= TR().greenRms && w.coverage >= 0.45 ? 'clean' : rmsMm(w) <= TR().yellowRms && w.coverage >= 0.3 ? 'check' : 'none');
 
 // ---------- pipeline ----------
 function recompute() {
@@ -256,7 +279,7 @@ function recompute() {
   const [w0, w1] = S.wheels;
   S.rect = S.rectRaw = S.scale = S.vals = S.crank = S.sta = null; S.auto = {};
   if (!S.img || !w0 || !w1) return;
-  const o = { W: S.img.W, H: S.img.H, D1: 686, D2: 686 }; // equal tires: only their ratio matters to the camera solve
+  const o = { W: S.img.W, H: S.img.H, D1: tireDk(0), D2: tireDk(1) }; // only their ratio matters to the camera solve
   const key = [w0.ell.cx, w0.ell.a, w1.ell.cx, w1.ell.a, w0.pts.length, w1.pts.length, S.focalMode, S.f35].join('|');
   if (key !== S.tiltKey) {
     S.tilt = Core.solveTilt(w0.pts, w1.pts, { ...o, f35: S.focalMode === 'fixed' && S.f35 ? S.f35 : null, f35Prior: S.f35 || null });
@@ -308,8 +331,8 @@ function evalRefs(rect) {
   rect.wheels.forEach((wh, k) => {
     const ex = Core.ellExtents(wh.ell), sig = Math.max(0.4, 1.5 * S.wheels[k].rms), nm = (k === rearIdx() ? 'Rear' : 'Front') + ' tire Ø, ';
     const useTire = S.tireAct > 0 || !(S.wb > 0 || S.sh > 0); // the rim guess is a last resort, never mixed with known values
-    out.push({ id: 'w' + k + 'h', name: nm + 'across', px: ex.w, theta: 0, L: tireD(), tol: tireTol(), sigPx: sig, group: 'tire', on: useTire, auto: true });
-    out.push({ id: 'w' + k + 'v', name: nm + 'upright', px: ex.h, theta: Math.PI / 2, L: tireD(), tol: tireTol(), sigPx: sig, group: 'tire', on: useTire, auto: true });
+    out.push({ id: 'w' + k + 'h', name: nm + 'across', px: ex.w, theta: 0, L: tireDk(k), tol: tireTol(), sigPx: sig, group: 'tire', on: useTire, auto: true, front: k !== rearIdx() });
+    out.push({ id: 'w' + k + 'v', name: nm + 'upright', px: ex.h, theta: Math.PI / 2, L: tireDk(k), tol: tireTol(), sigPx: sig, group: 'tire', on: useTire, auto: true, front: k !== rearIdx() });
   });
   for (const r of S.refs) {
     const a = rect.wheels[0].circ, b = rect.wheels[1].circ, d = Math.hypot(b.cx - a.cx, b.cy - a.cy);
@@ -320,7 +343,8 @@ function evalRefs(rect) {
 function computeScale(rect, extra) {
   const refs = evalRefs(rect).concat(extra || []), used = refs.filter(r => r.on);
   const a = rect.wheels[0].circ, b = rect.wheels[1].circ, wbPx = Math.hypot(b.cx - a.cx, b.cy - a.cy);
-  const tirePx = refs.filter(r => r.auto).reduce((s, r) => s + r.px, 0) / 4;
+  const tr = refs.filter(r => r.auto && (r.front || !(S.bike === 'mtb' && S.mixed))); // the front tire when the wheels differ
+  const tirePx = tr.reduce((s, r) => s + r.px, 0) / (tr.length || 1);
   const out = { refs, used: used.length, iso: null, ani: null, sx: null, sy: null, Z: Infinity, wbPx, tirePx, shPx: (extra && extra[0]) ? extra[0].px : null };
   // how round the tires are after correction, independent of which references are used
   const tires = refs.filter(r => r.auto), hs = tires.filter(r => r.theta === 0), vs = tires.filter(r => r.theta !== 0);
@@ -345,8 +369,9 @@ function estimateTire() {
   const { W, H } = S.img, td = tiltDir();
   const r = S.rect.wheels.map(w => Core.detectRimLip(S.fg, W, H, w.circ, td));
   S.rim = r;
-  if (r[0] && r[1] && Math.abs(r[0].ratio - r[1].ratio) < 0.006) S.tireEst = { D: RIM_LIP_700C / ((r[0].ratio + r[1].ratio) / 2), src: 'rim' };
-  else S.tireEst = { D: 686, src: 'default' };
+  // the rim lip rule is for 700c road and gravel rims: a mountain tire is too tall for it
+  if (S.bike !== 'mtb' && r[0] && r[1] && Math.abs(r[0].ratio - r[1].ratio) < 0.006) S.tireEst = { D: RIM_LIP_700C / ((r[0].ratio + r[1].ratio) / 2), src: 'rim' };
+  else S.tireEst = { D: tireDefault(), src: 'default' };
 }
 // Which way the bike faces: a drive-side photo faces right. Try both ways: the seat tube and the chainring are only found from the right rear wheel.
 // Run once per photo. It may run again while the tire outlines are being placed (they decide which wheel is which),
@@ -361,13 +386,16 @@ function detectSide() {
   for (const fr of [true, false]) {
     const RA = S.rect.wheels[fr ? 0 : 1].circ, dir = fr ? 1 : -1;
     const st = Core.detectSeatTube(S.fg, W, H, { bbx: RA.cx + dir * 410 / s, bby: RA.cy + 70 / s, dir, s, t0: 380, t1: 650, guess: 73.5 });
-    const ck = Core.detectCrank(S.fg, W, H, { rax: RA.cx, ray: RA.cy, dir, s });
+    // mountain bikes run one small ring (30-34 teeth), so the ring can be well under a road inner ring
+    const mtb = S.bike === 'mtb', ringMin = mtb ? 85 : 120; // on a direct-mount ring the cleanest circle can be its inner edge
+    const ck = Core.detectCrank(S.fg, W, H, { rax: RA.cx, ray: RA.cy, dir, s, rMinMm: mtb ? 45 : 55 });
     // a ring counts by how much of it was found and how cleanly it fits: a solid chainring can be half hidden by the
     // chain and crank but fit very cleanly, while a ring found in the wrong place fits badly
     const ringD = ck ? 2 * ck.r * s : 0;
-    const ring = ck && ringD >= 120 && ringD <= 260 ? Math.min(1, ck.coverage) * (ck.rms <= 1 ? 1 : ck.rms <= 2 ? 0.5 : 0.15) : 0;
+    const ring = ck && ringD >= ringMin && ringD <= 260 ? Math.min(1, ck.coverage) * (ck.rms <= 1 ? 1 : ck.rms <= 2 ? 0.5 : 0.15) : 0;
     sc[fr] = (st.ok ? 2 : 0) + st.n / st.nSt + 1.5 * ring;
   }
+  S.sideScore = sc;
   S.sideAuto = sc[true] >= sc[false] ? 'drive' : 'nds';
   S.sideConf = Math.abs(sc[true] - sc[false]) >= 0.8 ? 'high' : 'low';
 }
@@ -635,7 +663,7 @@ function scheduleMC() { clearTimeout(mcTimer); mcTimer = setTimeout(() => { runM
 function runMC() {
   S.mc = null;
   if (!S.rect || !S.scale || !S.scale.sx) return;
-  const N = 200, o = { W: S.img.W, H: S.img.H, D1: 686, D2: 686 };
+  const N = 200, o = { W: S.img.W, H: S.img.H, D1: tireDk(0), D2: tireDk(1) };
   const sub = S.wheels.map(w => w.pts.filter((_, i) => i % 4 === 0));
   const tilt = S.flatten ? S.tilt : null, diag = Math.hypot(o.W, o.H);
   const base = Core.buildRect(sub[0], sub[1], tilt, o), r0 = base.wheels[0].circ.r + base.wheels[1].circ.r;
@@ -667,7 +695,7 @@ function gradePhoto() {
   add(slant < 8 ? 'good' : slant < 20 ? 'ok' : 'poor', 'Camera angle', `${fmt(slant, 1)}° off square`, adv);
   const cov = Math.min(...S.wheels.map(w => Math.min(1, w.coverage))), rms = Math.max(...S.wheels.map(w => w.rms));
   const rmm = Math.max(...S.wheels.map(rmsMm)); // the same millimeter limits as the dots and the Rear/Front labels
-  add(cov >= 0.45 && rmm <= TRACE.greenRms ? 'good' : cov >= 0.3 && rmm <= TRACE.yellowRms ? 'ok' : 'poor', 'Tire outlines', `${Math.round(cov * 100)}% traced, within ${fmt(rmm, 1)} mm`, 'Move any yellow or red dots onto the outer edge of the tire, or use a plainer background.');
+  add(cov >= 0.45 && rmm <= TR().greenRms ? 'good' : cov >= 0.3 && rmm <= TR().yellowRms ? 'ok' : 'poor', 'Tire outlines', `${Math.round(cov * 100)}% traced, within ${fmt(rmm, 1)} mm`, 'Move any yellow or red dots onto the outer edge of the tire, or use a plainer background.');
   // A turned front wheel makes the front tire, and only the front tire, look narrower than tall after correction.
   // Squash that both tires share (edge finding at the ground, the solve itself) says nothing about steering.
   const oor = S.rect.wheels.map(w => { const e = Core.ellExtents(w.ell); return e.h / e.w - 1; }), ri = rearIdx();
@@ -1365,7 +1393,7 @@ function setTool(t, info) {
   else if (t.startsWith('geo:')) { const g = GEO.find(g => g.k === t.slice(4)); banner(`<b>${esc(g.name)}:</b> ${esc(g.hint)} Scroll to zoom. Esc cancels.`); }
   draw();
 }
-function refit(k) { const { gray, W, H } = S.img; S.wheels[k] = Core.fitWheel(gray, W, H, S.inits[k]); afterChange(); }
+function refit(k) { const { gray, W, H } = S.img, d = S.inits[k]; S.wheels[k] = Core.fitWheel(gray, W, H, d, null, 0, knobPx(d.a != null ? d : { a: d.r, b: d.r })); afterChange(); }
 const UNDO_KEYS = ['ringOff', 'boltOff', 'lockA', 'lockX', 'stOff', 'stA', 'lowerHS', 'base', 'geo', 'steer', 'touched', 'geoShown', 'measures', 'bbMode', 'bbCircle', 'sideSet', 'wb', 'sh', 'tireAct', 'tireSel', 'forkOffset', 'sadRef', 'dropTo', 'barD', 'chartId', 'customChart'];
 const histSnap = () => { const o = {}; for (const k of UNDO_KEYS) o[k] = S[k]; return JSON.stringify(o); };
 function histRecord() {
@@ -1696,13 +1724,13 @@ const WIZ = [
   { k: 'wheels', title: 'Tire outlines', keys: [],
     text: () => S.autoGood && S.tirePlaced.flat().every(v => v) && !S.wheelsHand
       ? 'Both tires were traced cleanly and agree with each other after the camera correction, so the points start green. Check that they sit on the outer edge of the tire, not the rim; move any that don\'t, or press OK.'
-      : (S.autoWhy && S.autoWhy.length && !S.wheelsHand ? `The automatic trace needs checking: ${S.autoWhy.join('; ')}. ` : '') + 'Each tire has five points, placed from a first guess. Zoom in and put every one exactly on the outer edge of the tire: drag it, or click near it to move it there. Pulsing points haven\'t been placed yet. The colours show how well the traced tire edge agrees with each point and update as you go: aim for all green.',
+      : (S.autoWhy && S.autoWhy.length && !S.wheelsHand ? `The automatic trace needs checking: ${S.autoWhy.join('; ')}. ` : '') + 'Each tire has five points, placed from a first guess. Zoom in and put every one exactly on the outer edge of the tire' + (TR().knob ? ', on the tips of the knobs' : '') + ': drag it, or click near it to move it there. Pulsing points haven\'t been placed yet. The colours show how well the traced tire edge agrees with each point and update as you go: aim for all green.',
     status: () => S.wheels.map((w, k) => { const q = wheelQuality(w); return `${k === rearIdx() ? 'Rear' : 'Front'} tire: ${q === 'clean' ? 'traced cleanly' : q === 'check' ? 'traced, but not cleanly: check the dots' : 'edge not found: move the outline onto the tire'}`; }),
     enter: () => { S.view.mode = 'orig'; },
     can: () => { const left = S.tirePlaced.flat().filter(v => !v).length;  // pulsing points are the ones still to place
       if (left) return `Place all ten points first: ${left} still to place.`;
       const red = [0, 1].reduce((n, k) => n + [0, 1, 2, 3, 4].filter(i => S.wheels[k] && tirePtColor(k, i) === '#F04438').length, 0);
-      if (red) return `Move the ${red} red dot${red > 1 ? 's' : ''} onto the outer edge of the tire first.`;
+      if (red) return `Move the ${red} red dot${red > 1 ? 's' : ''} onto the outer edge of the tire${TR().knob ? ' (the knob tips)' : ''} first.`;
       return S.wheels.every(w => wheelQuality(w) !== 'none') ? true : 'Both tire edges have to be traced first. If they can\'t be, the photo needs a plainer background.'; },
     zoom: () => null,
     info: () => ['Photo check', photoReport()] },
@@ -1839,10 +1867,42 @@ $('startUpload').onclick = () => $('file').click();
 $('startGood').onclick = () => { showStart(false); loadImage(EXAMPLES.dead.src, EXAMPLES.dead); };
 $('startHard').onclick = () => { showStart(false); loadImage(EXAMPLES.stairs.src, EXAMPLES.stairs); };
 $('start').addEventListener('keydown', e => { if (e.key === 'Escape' && S.img) showStart(false); });
-$('file').onchange = e => { const f = e.target.files[0]; if (f) { showStart(false); loadImage(f, null); } e.target.value = ''; };
+// your own photo: ask what kind of bike first, since knobby tires trace differently
+let bikeFile = null;
+function askBike(f) {
+  bikeFile = f; $('bikeStep1').style.display = ''; $('bikeStep2').style.display = 'none';
+  $('bikeAsk').style.display = 'flex'; $('bikeRoad').focus();
+}
+function bikeChosen(bike, mixed) {
+  $('bikeAsk').style.display = 'none'; const f = bikeFile; bikeFile = null;
+  if (f) { showStart(false); loadImage(f, null, { bike, mixed }); }
+}
+$('bikeRoad').onclick = () => bikeChosen('road', false);
+$('bikeGravel').onclick = () => bikeChosen('gravel', false);
+$('bikeMtb').onclick = () => { $('bikeStep1').style.display = 'none'; $('bikeStep2').style.display = ''; $('bikeSame').focus(); };
+$('bikeSame').onclick = () => bikeChosen('mtb', false);
+$('bikeMixed').onclick = () => bikeChosen('mtb', true);
+$('bikeCancel').onclick = () => { $('bikeAsk').style.display = 'none'; bikeFile = null; };
+$('bikeAsk').addEventListener('keydown', e => { if (e.key === 'Escape') $('bikeCancel').click(); });
+// changing the type later: retrace the tires with the new limits
+function setBike(bike, mixed) {
+  if (!S.img || (S.bike === bike && !!S.mixed === !!mixed)) return;
+  S.bike = bike; S.mixed = !!mixed;
+  if (S.tireEst.src === 'default') S.tireEst = { D: tireDefault(), src: 'default' };
+  S.rimKey = ''; S.tiltKey = '';
+  if (S.wheelsHand) { S.wheels = [0, 1].map(handTrace); S.blocked = S.wheels.some(w => !w); }
+  else { findWheels(); recompute(); const a = autoCheck(); S.autoGood = a.ok; S.autoWhy = a.why; if (S.autoGood) S.tirePlaced = S.tirePlaced.map(r => r.map(() => true)); }
+  syncInputs(); afterChange();
+}
+$('bkRoad').onclick = () => setBike('road', false);
+$('bkGravel').onclick = () => setBike('gravel', false);
+$('bkMtb').onclick = () => setBike('mtb', S.bike === 'mtb' && S.mixed);
+$('bkSame').onclick = () => setBike('mtb', false);
+$('bkMixed').onclick = () => setBike('mtb', true);
+$('file').onchange = e => { const f = e.target.files[0]; if (f) askBike(f); e.target.value = ''; };
 document.querySelector('label[for="file"]').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
 $('stage').addEventListener('dragover', e => e.preventDefault());
-$('stage').addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) { showStart(false); loadImage(f, null); } });
+$('stage').addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) askBike(f); });
 $('vOrig').onclick = () => { S.view.mode = 'orig'; renderAll(); draw(); };
 $('vFlat').onclick = () => { S.view.mode = 'flat'; renderAll(); draw(); };
 const center = () => { const r = cv.getBoundingClientRect(); return [r.width / 2, r.height / 2]; };
@@ -1871,7 +1931,7 @@ $('tireManual').onclick = () => {
   S.tireSel = 'manual'; const v = parseFloat($('tireD').value); S.tireAct = v > 300 ? v : null; afterChange(); $('tireD').focus();
 };
 $('tireSel').onchange = e => {
-  const v = e.target.value, t = TIRES.find(x => x[0] === v);
+  const v = e.target.value, t = tireList().find(x => x[0] === v);
   S.tireSel = v; S.tireAct = t ? t[1] : v === 'manual' ? (parseFloat($('tireD').value) > 300 ? parseFloat($('tireD').value) : null) : null;
   afterChange();
   if (v === 'manual') $('tireD').focus();
@@ -1921,7 +1981,7 @@ $('copyPts').onclick = async () => {
 
 
 // which version is running, shown in the footer (Shopify: the line under the tool)
-const DATUM_VERSION = 'v2';
+const DATUM_VERSION = 'v3';
 { const f = document.querySelector('footer'); if (f) f.textContent = f.textContent.trim() + ' - DATUM ' + DATUM_VERSION; }
 sizeCanvas();
 showStart(true); // nothing loads until the visitor picks

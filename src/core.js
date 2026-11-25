@@ -255,7 +255,9 @@ const Core = (() => {
   // init: a circle {cx, cy, r} from auto-detection, or an ellipse {cx, cy, a, b, phi} outlined by hand.
   // tol (px): the outline came from dots a person placed, trusted to a few mm. Only edges within tol of it count, and
   // the edge nearest it wins, so a strong edge just inside (a tan sidewall) can't pull the trace off the tread.
-  function fitWheel(gray, w, h, init, win, tol) {
+  // knob (px): how deep a knobby tire's tread is. The edge then jumps between knob tips and the gaps between them, so
+  // the final outline is fitted to the tips only (the outermost edge in each slice of the wheel).
+  function fitWheel(gray, w, h, init, win, tol, knob) {
     // a hand outline is searched in a narrow band, taking the edge nearest the outline: the rim lies inside the tire
     // and the wheel's shadow can lie outside it, so the outline decides which edge is the tire
     const inBand0 = p => Math.abs(ellDist(init, p.x, p.y)) <= tol;
@@ -272,7 +274,7 @@ const Core = (() => {
     const inBand = p => !tol || Math.abs(ellDist(init, p.x, p.y)) <= tol;
     let keep = isEll ? pts.filter(p => Math.abs(ellDist(init, p.x, p.y)) < (tol || 0.045 * r0))
       : pts.filter(p => Math.abs(p.r - rMed) < Math.max(3 * mad0, 0.012 * init.r));
-    let ell = null;
+    let ell = null, lastAll = null;
     const robust = (all) => {
       let k = keep, e = null;
       for (let it = 0; it < 6; it++) {
@@ -297,10 +299,15 @@ const Core = (() => {
       if (p2.length < 60) break;
       const sm = median(p2.map(p => p.str));
       p2 = p2.filter(p => p.str > 0.3 * sm);
-      keep = p2.filter(p => Math.abs(ellDist(e0, p.x, p.y)) < Math.max(3, 0.006 * e0.a));
+      keep = p2.filter(p => Math.abs(ellDist(e0, p.x, p.y)) < Math.max(3, 0.006 * e0.a, 1.2 * (knob || 0)));
+      lastAll = p2;
       const e1 = robust(p2);
       if (!e1) break;
       ell = e1;
+    }
+    if (knob > 0) {
+      const env = knobEnvelope(lastAll || pts, ell, knob);
+      if (env) return env;
     }
     let ss = 0;
     for (const p of keep) { const d = ellDist(ell, p.x, p.y); ss += d * d; }
@@ -310,22 +317,49 @@ const Core = (() => {
   // Trace from a hand outline. People are off by a few percent, so trace from sizes within ±3% of it and keep the
   // largest clean fit. A trace onto the wheel's shadow fits badly (rms over 1 px on test photos vs under 0.6 px
   // on the tire); the rim can fit cleanly too, but it is smaller.
-  function fitWheelHand(gray, w, h, ell, tol) {
-    if (tol) return fitWheel(gray, w, h, { cx: ell.cx, cy: ell.cy, a: ell.a, b: ell.b, phi: ell.phi || 0 }, null, tol);
-    // two rounds: the second starts from the first result, which fixes an outline drawn off-center
-    const r1 = fitWheelHandOnce(gray, w, h, ell);
-    if (!r1) return null;
-    return fitWheelHandOnce(gray, w, h, r1.ell, [0.99, 1, 1.01]) || r1;
+  // Knob tips: split the wheel into slices and keep the outermost edge in each (a knob tip, not the gap beside it),
+  // then fit the outline to those. Coverage is the share of slices with a tip.
+  function knobEnvelope(all, ell, knob) {
+    // each slice spans about eight knob depths of tread, wide enough to hold a whole knob on big mountain treads
+    const N = Math.round(Math.min(120, Math.max(48, 2 * Math.PI * (ell.a + ell.b) / 2 / (8 * knob))));
+    const bins = new Array(N).fill(null), lim = 1.5 * knob + 3;
+    for (const p of all) {
+      const d = ellDist(ell, p.x, p.y);
+      if (Math.abs(d) > lim) continue;
+      const i = Math.floor((Math.atan2(p.y - ell.cy, p.x - ell.cx) + Math.PI) / (2 * Math.PI) * N) % N;
+      if (!bins[i] || d > bins[i].d) bins[i] = { p, d };
+    }
+    let env = bins.filter(Boolean).map(b => b.p);
+    if (env.length < 30) return null;
+    let e = null;
+    for (let it = 0; it < 3; it++) {
+      e = fitEllipse(env.map(p => [p.x, p.y]));
+      if (!e) return null;
+      const r = env.map(p => ellDist(e, p.x, p.y)), s = 1.4826 * median(r.map(Math.abs));
+      const kept = env.filter((p, i) => Math.abs(r[i]) < Math.max(2.5 * s, 0.5));
+      if (kept.length < 30 || kept.length === env.length) break;
+      env = kept;
+    }
+    let ss = 0;
+    for (const p of env) { const d = ellDist(e, p.x, p.y); ss += d * d; }
+    return { ell: e, pts: env.map(p => [p.x, p.y]), rms: Math.sqrt(ss / env.length), coverage: env.length / N };
   }
-  function fitWheelHandOnce(gray, w, h, ell, ks) {
+  function fitWheelHand(gray, w, h, ell, tol, knob) {
+    if (tol) return fitWheel(gray, w, h, { cx: ell.cx, cy: ell.cy, a: ell.a, b: ell.b, phi: ell.phi || 0 }, null, tol, knob);
+    // two rounds: the second starts from the first result, which fixes an outline drawn off-center
+    const r1 = fitWheelHandOnce(gray, w, h, ell, null, knob);
+    if (!r1) return null;
+    return fitWheelHandOnce(gray, w, h, r1.ell, [0.99, 1, 1.01], knob) || r1;
+  }
+  function fitWheelHandOnce(gray, w, h, ell, ks, knob) {
     const fits = [];
     for (const k of ks || [0.97, 0.98, 0.99, 1, 1.01, 1.02, 1.03]) {
-      const f = fitWheel(gray, w, h, { cx: ell.cx, cy: ell.cy, a: ell.a * k, b: ell.b * k, phi: ell.phi || 0 });
+      const f = fitWheel(gray, w, h, { cx: ell.cx, cy: ell.cy, a: ell.a * k, b: ell.b * k, phi: ell.phi || 0 }, null, 0, knob);
       if (f && f.coverage >= 0.35) fits.push(f);
     }
     if (!fits.length) return null;
     // the tire is the outermost clean edge: a crisp rim can fit even better, but it lies inside
-    const clean = fits.filter(f => f.rms <= 0.6);
+    const clean = fits.filter(f => f.rms <= Math.max(0.6, 0.3 * (knob || 0)));
     if (clean.length) return clean.reduce((m, f) => f.ell.a + f.ell.b > m.ell.a + m.ell.b ? f : m);
     return fits.reduce((m, f) => f.rms < m.rms ? f : m);
   }

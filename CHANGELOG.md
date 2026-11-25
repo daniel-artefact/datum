@@ -3,6 +3,21 @@
 Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATUM section's Script URL.
 Rolling back = pasting the previous version's link.
 
+## v3 (in progress)
+- Bike type, picked after choosing your photo: Road / Gravel / Mountain, and for Mountain, same size wheels or mixed
+  (29 front, 27.5 rear). Also switchable in Setup > Photo, which retraces the tires.
+- Knobby tires: the trace is fitted to the knob tips (the outermost edge in each slice of the wheel, slices about eight
+  knob depths wide), not to every edge between knobs. Dots go on the knob tips.
+- Limits per type (trace scatter for green / yellow; dot distance green / yellow; how far a placed dot is trusted):
+  Road 0.75 / 1.5, 2.5 / 6, 5 mm. Gravel 1.25 / 2.5, 4 / 8, 6 mm. Mountain 2.25 / 4, 6 / 10, 8 mm. Random scatter
+  over 50+ traced points moves the fitted diameter by about a tenth of the scatter.
+- Mountain tire sizes (29 and 27.5, 2.2-2.6) using the same rule as the road list (OD = bead + 2 x width); default
+  744 mm (29x2.4), gravel 702 mm. Mixed wheels: the rear is the front size less 38 mm, used in the camera solve and
+  the scale; the tire picker sets the front. The 700c rim-lip size guess is skipped on mountain bikes.
+- Side detection on mountain bikes accepts a single small ring (its cleanest circle can be under 100 mm); the test
+  MTB photo was read as non-drive side before, which swapped the Rear / Front labels.
+- Test: tests/mtb.py (Daniel's full-suspension photo, tests/photos/, kept out of git).
+
 ## v2 (released 2026-11-25: datum-v2.js?v=1795643586)
 - Tan sidewalls: once a dot on a wheel is placed by hand, the trace only looks within 5 mm of the outline through
   the dots and takes the edge nearest it. Before, the strong tan/black edge inside the tread pulled the trace up to
