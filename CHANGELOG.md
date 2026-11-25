@@ -4,6 +4,11 @@ Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATU
 Rolling back = pasting the previous version's link.
 
 ## v2 (in progress)
+- Setup flow (Daniel's copy): start screen with why DATUM exists, signed - Daniel; after the tires, a photo check
+  (camera angle, tire outlines, front wheel, resolution, with advice); the chainring step explains finding the
+  chainring's center; a note to check the BB carefully and why it isn't at the chainring's center (parallax); the scale
+  step says it's only as accurate as your physical measurement; a last note on accuracy (+/-3 mm with good inputs,
+  +/-10 mm in real life), signed - Daniel.
 - Start screen: what DATUM is, then Upload your photo / Example: good edge detection / Example: bad edge detection.
   Nothing loads until the visitor picks. The header's three example buttons became one Examples button.
 - Phones: pinch to zoom (two fingers zoom and pan; a point the first finger started moving goes back), bigger points,

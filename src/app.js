@@ -1682,14 +1682,23 @@ const WIZ = [
     can: () => { const left = S.tirePlaced.flat().filter(v => !v).length;  // pulsing points are the ones still to place
       if (left) return `Place all ten points first: ${left} still to place.`;
       return S.wheels.every(w => wheelQuality(w) !== 'none') ? true : 'Both tire edges have to be traced first. If they can\'t be, the photo needs a plainer background.'; },
-    zoom: () => null },
+    zoom: () => null,
+    after: next => showNote({ mark: 'Photo check', title: 'Your photo', ok: 'OK', back: 'Go back', onOk: next, html: photoReport() }) },
   { k: 'bb', title: 'Bottom bracket', show: ['photoPanel', 'bbPanel'],
-    text: () => `The yellow circle should sit on ${S.side === 'drive' ? 'the outer edge of the chainring' : 'the crank bolt, or the hole at the end of the spindle'} all the way round. Drag the circle or its edge handle until it lines up, or click to move it there.`,
+    text: () => S.side === 'drive'
+      ? 'The chainring locates the bottom bracket. Use the circle to find the center of the chainring: line it up with the outer edge of the chainring all the way round. Drag the circle or its edge handle, or click to move it there. From the center of the chainring, the perspective correction places the bottom bracket.'
+      : 'The crank bolt locates the bottom bracket. Use the circle to find its center: line it up with the crank bolt, or the hole at the end of the spindle, all the way round. Drag the circle or its edge handle, or click to move it there. From there, the perspective correction places the bottom bracket.',
+    after: next => showNote({ mark: 'Bottom bracket', title: 'Check it carefully', ok: 'OK', back: 'Go back', onOk: next,
+      html: `<p>This step is very important. Take extra care to get it right: everything in the fit and the geometry is measured from the bottom bracket.</p><p>It's normal for the BB not to sit in the center of the ${S.side === 'drive' ? 'chainring' : 'crank bolt'}. The ${S.side === 'drive' ? 'chainring' : 'crank bolt'} sits about ${fmt(S.bbDepth || (S.side === 'drive' ? 50 : 70), 0)} mm out from the middle of the frame, so on an angled photo it looks shifted. DATUM corrects the BB's position for this parallax.</p>` }),
     enter: () => { S.view.mode = 'flat'; },
     can: () => S.geo.bb ? true : 'Place the circle first.',
     zoom: () => { const b = S.bbCircle || S.crank; return b ? [[b.cx - 1.8 * b.r, b.cy - 1.8 * b.r], [b.cx + 1.8 * b.r, b.cy + 1.8 * b.r]] : null; } },
   { k: 'scale', title: 'Scale', show: ['scalePanel'],
-    text: () => 'Give the photo a scale: measure the wheelbase if you can, or pick the tire size.',
+    html: () => 'DATUM needs a real-world reference to set the scale. <strong>It\'s only as accurate as your physical measurement</strong>, and it affects the accuracy of the entire model.</p>'
+      + '<p>Wheelbase is the most accurate. Tire size can be used if you don\'t have an easy way of measuring; keep in mind tires can vary 2-3% from their stated size. An accurate saddle height measurement is good to know regardless. Entering all three improves the accuracy of the model.',
+    text: () => '',
+    after: next => showNote({ mark: 'Last note', title: 'Before you start', ok: 'Start', back: 'Go back', onOk: next,
+      html: '<p>DATUM is only as accurate as the information you put in. With good inputs, DATUM can confidently reach &plusmn;3 mm.</p><p>Finally, keep in mind that when translating a fit to real life, it will never be an exact match. Expect &plusmn;10 mm in the real world. Always leave room to adjust and tweak as your body changes: this is the key to a good custom bike.</p><p class="sig">- Daniel</p>' }),
     enter: () => { S.view.mode = 'flat'; },
     can: () => S.wb > 0 || S.tireAct > 0 ? true : 'Enter the wheelbase, or pick the tire size.' },
 ];
@@ -1724,15 +1733,34 @@ function renderWiz() {
   $('wizStrip').innerHTML = WIZ.map((_, i) => `<span class="${i < S.wiz ? 'done' : i === S.wiz ? 'now' : ''}"></span>`).join('');
   $('wizStrip').style.gridTemplateColumns = `repeat(${WIZ.length}, 1fr)`;
   $('wizN').textContent = `${S.wiz + 1}/${WIZ.length}`; $('wizTitle').textContent = st.title;
-  $('wizText').innerHTML = `<p>${esc(st.text())}</p>` + (st.status ? st.status().map(t => `<p class="note">${esc(t)}</p>`).join('') : '');
+  $('wizText').innerHTML = `<p>${st.html ? st.html() : esc(st.text())}</p>` + (st.status ? st.status().map(t => `<p class="note">${esc(t)}</p>`).join('') : '');
   $('wizBack').style.visibility = S.wiz > 0 ? 'visible' : 'hidden';
   $('wizOk').disabled = false;
 }
 function wizOk() {
   const st = WIZ[S.wiz], ok = st.can ? st.can() : true;
   if (ok !== true) { $('wizMsg').textContent = ok; return; }
-  if (S.wiz + 1 < WIZ.length) wizGo(S.wiz + 1);
-  else { S.setupDone = true; S.tab = 'fit'; wizGo(null); }
+  const next = () => { if (S.wiz + 1 < WIZ.length) wizGo(S.wiz + 1); else { S.setupDone = true; S.tab = 'fit'; wizGo(null); } };
+  if (st.after) st.after(next); else next(); // a step can show a note first; OK there moves on, Go back stays
+}
+// a note over the photo between steps
+let noteThen = null;
+function showNote(o) {
+  $('noteMark').textContent = o.mark || ''; $('noteTitle').textContent = o.title; $('noteBody').innerHTML = o.html;
+  $('noteOk').textContent = o.ok || 'OK'; $('noteBack').textContent = o.back || 'Go back'; $('noteBack').style.display = o.back === false ? 'none' : '';
+  noteThen = o.onOk || null; $('note').style.display = 'flex'; $('noteOk').focus();
+}
+$('noteOk').onclick = () => { $('note').style.display = 'none'; const f = noteThen; noteThen = null; if (f) f(); };
+$('noteBack').onclick = () => { $('note').style.display = 'none'; noteThen = null; };
+$('note').addEventListener('keydown', e => { if (e.key === 'Escape') $('noteBack').click(); });
+// the photo check after the tires: how the camera solve and the traces came out
+function photoReport() {
+  const g = gradePhoto(), name = { good: 'Good', ok: 'Check', poor: 'Weak' };
+  let h = '<p>Using the tire outlines, DATUM works out the camera\'s angle and position, then flattens the image to correct for perspective distortion.</p>';
+  if (!g) return h;
+  h += '<ul class="grade">' + g.items.map(i => `<li class="lv-${i.level}"><span class="lv">${name[i.level]}</span><b>${esc(i.label)}</b><span class="val">${esc(i.value)}</span>${i.advice ? `<em>${esc(i.advice)}</em>` : ''}</li>`).join('') + '</ul>';
+  h += `<p class="verdict lv-${g.level}">${g.level === 'good' ? 'A good photo for measuring.' : g.level === 'ok' ? 'Usable. The items marked Check will make some numbers less certain.' : 'A weak photo for measuring: expect rough numbers. A better photo helps more than anything else.'}</p>`;
+  return h;
 }
 // In a point step a click (not a drag) moves that step's point there; in the BB step it moves the circle.
 function wizClick(x, y) {

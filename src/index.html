@@ -173,14 +173,23 @@ __CSS__</style>
   <div class="startCard">
     <span class="mark">ARTEFACT: Fit tools</span>
     <h2 id="startTitle">DATUM</h2>
-    <p>Measures a bike's fit and frame geometry from one photo taken from the side.</p>
-    <p>The two tires show the camera angle, so the photo can be squared up. One measurement you trust, like the wheelbase, sets the scale. The photo stays in your browser and is never uploaded.</p>
+    <p>I created DATUM as an internal tool to design custom bikes and reverse engineer designs. It's based on a workflow I've used for years. I wanted to make it available to everyone, to help improve their fits and make sure they buy the right size.</p>
+    <p class="sig">- Daniel</p>
     <div class="startOpts">
       <button class="btn primary" id="startUpload">Upload your photo</button>
       <button class="btn opt" id="startGood">Example: good edge detection<span>Plain wall, square to the bike. The tires trace on their own.</span></button>
       <button class="btn opt" id="startHard">Example: bad edge detection<span>Busy background. Shows how to fix the tire outlines by hand.</span></button>
     </div>
+    <p class="small">Your photo stays in your browser and is never uploaded.</p>
     <button class="startClose" id="startClose">Back to my photo</button>
+  </div>
+</div>
+<div id="note" role="dialog" aria-modal="true" aria-labelledby="noteTitle">
+  <div class="startCard">
+    <span class="mark" id="noteMark"></span>
+    <h2 id="noteTitle"></h2>
+    <div id="noteBody"></div>
+    <div class="noteBtns"><button class="btn okb" id="noteOk">OK</button><button class="btn" id="noteBack">Go back</button></div>
   </div>
 </div>
 <footer>ARTEFACT: Designed in California. Beta, accuracy still being tested.</footer>
