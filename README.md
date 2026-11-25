@@ -34,8 +34,14 @@ example photos.
 
 ## Build
 
-    python3 build.py        # writes dist/index.html
+    python3 build.py           # dist/index.html: the standalone page (as in the artifact)
+    python3 build_shopify.py   # dist/shopify/photo-fit.js: the Shopify theme bundle
     python3 -m http.server 8001 --directory dist
+
+The Shopify bundle mounts the app in a shadow root inside `<photo-fit-app>` (theme section `sections/photo-fit.liquid`,
+template `templates/page.photo-fit.json`), so theme CSS and app CSS stay apart. It is plain ASCII so it reads the
+same whatever charset it is served with. Example photos come from the section's image pickers (same-origin
+`/cdn/shop/files/...` URLs).
 
 ## Hosting plan (decided 2026-11-25)
 

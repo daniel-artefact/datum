@@ -1432,7 +1432,7 @@ cv.addEventListener('pointerleave', () => { S.hover = null; if (!S.drag && !ring
 cv.addEventListener('wheel', e => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape' && S.tool) setTool(null);
-  if (!(e.ctrlKey || e.metaKey) || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (!(e.ctrlKey || e.metaKey) || /^(INPUT|SELECT|TEXTAREA)$/.test(((e.composedPath && e.composedPath()[0]) || e.target).tagName || '') /* composedPath: the real target inside a shadow root */) return;
   const k = e.key.toLowerCase();
   if (k === 'z' && !e.shiftKey) { e.preventDefault(); histGo(true); }
   else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); histGo(false); }
