@@ -228,7 +228,7 @@ p.verdict { font-weight: 500; } p.verdict.lv-good { color: #3FB950; } p.verdict.
   <div class="brand"><span class="mark">ARTEFACT: Fit tools</span><h1>DATUM</h1></div>
   <div class="sub">One side-on photo of your bike. The two tires correct the camera angle; one real measurement sets the scale. The photo stays in your browser.</div>
   <div class="row">
-    <button class="btn" id="showStart" title="The examples and what DATUM is">Examples</button>
+    <button class="btn" id="showStart" title="The demos and what DATUM is">Demos</button>
     <button class="btn" id="resetPhoto" title="Forget everything placed on this photo and start again, as if just uploaded">Reset photo</button>
     <label class="btn primary" for="file" tabindex="0">Open photo</label>
     <input type="file" id="file" accept="image/*" hidden>
@@ -388,9 +388,9 @@ p.verdict { font-weight: 500; } p.verdict.lv-good { color: #3FB950; } p.verdict.
     <p>I created DATUM as an internal tool to design custom bikes and reverse engineer designs. It's based on a workflow I've used for years. I wanted to make it available to everyone, to help improve their fits and make sure they buy the right size.</p>
     <p class="sig">- Daniel</p>
     <div class="startOpts">
+      <button class="btn primary" id="startGood">Demo: good edge detection</button>
+      <button class="btn primary" id="startHard">Demo: bad edge detection</button>
       <button class="btn primary" id="startUpload">Upload your photo</button>
-      <button class="btn opt" id="startGood">Example: good edge detection<span>Plain wall, square to the bike. The tires trace on their own.</span></button>
-      <button class="btn opt" id="startHard">Example: bad edge detection<span>Busy background. Shows how to fix the tire outlines by hand.</span></button>
     </div>
     <p class="small">Your photo stays in your browser and is never uploaded.</p>
     <button class="startClose" id="startClose">Back to my photo</button>
