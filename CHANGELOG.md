@@ -4,6 +4,8 @@ Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATU
 Rolling back = pasting the previous version's link.
 
 ## v2 (in progress)
+- Before you start is the final popup after the scale step (new copy: don't get lost in the numbers; transferring a
+  fit between bikes is never exact, expect +/-10 mm), with Start / Go back.
 - Tire trace quality judged in millimeters, not pixels (a sharper photo was judged harder): sized by a 700x30 tire
   (682 mm). Green: trace within 0.75 mm on average and the dot within 2.5 mm of the edge; yellow: 1.5 mm and 6 mm;
   red beyond. The same limits drive the dots, the Rear/Front labels and the photo check. Red dots now block OK.

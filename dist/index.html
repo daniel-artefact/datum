@@ -2893,7 +2893,7 @@ const WIZ = [
     html: () => 'DATUM needs a real-world reference to set the scale. <strong>It\'s only as accurate as your physical measurement</strong>, and it affects the accuracy of the entire model.</p>'
       + '<p>Wheelbase is the most accurate. Tire size can be used if you don\'t have an easy way of measuring; keep in mind tires can vary 2-3% from their stated size. An accurate saddle height measurement is good to know regardless. Entering all three improves the accuracy of the model.',
     text: () => '',
-    info: () => ['Before you start', '<p>DATUM is only as accurate as the information you put in. With good inputs, DATUM can confidently reach &plusmn;3 mm.</p><p>Finally, keep in mind that when translating a fit to real life, it will never be an exact match. Expect &plusmn;10 mm in the real world. Always leave room to adjust and tweak as your body changes: this is the key to a good custom bike.</p><p class="sig">- Daniel</p>'],
+    final: () => '<p>DATUM is only as accurate as the information you put in. With good inputs, DATUM can confidently reach &plusmn;3 mm.</p><p>Don\'t get lost in the numbers. Transferring a fit between bikes will never be an exact match. Expect &plusmn;10 mm in the real world. Always leave room to adjust and tweak as your body changes: this is the key to a good custom bike.</p><p class="sig">- Daniel</p>',
     enter: () => { S.view.mode = 'flat'; },
     can: () => S.wb > 0 || S.tireAct > 0 ? true : 'Enter the wheelbase, or pick the tire size.' },
 ];
@@ -2946,7 +2946,10 @@ function wizOk() {
   if (ok !== true) { $('wizMsg').textContent = ok; return; }
   if (st.info && !S.wizInfo) { S.wizInfo = true; $('wizMsg').textContent = ''; renderWiz(); return; } // first the step's info slide
   S.wizInfo = false;
-  if (S.wiz + 1 < WIZ.length) wizGo(S.wiz + 1); else { S.setupDone = true; S.tab = 'fit'; wizGo(null); }
+  const finish = () => { S.setupDone = true; S.tab = 'fit'; wizGo(null); };
+  if (S.wiz + 1 < WIZ.length) wizGo(S.wiz + 1);
+  else if (st.final) showNote({ mark: 'Last note', title: 'Before you start', html: st.final(), ok: 'Start', back: 'Go back', onOk: finish }); // the final popup
+  else finish();
 }
 // a note over the photo between steps
 let noteThen = null;

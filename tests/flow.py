@@ -20,8 +20,8 @@ async def run(b, nm, vp, mobile):
     await click('#wizBack'); print(nm, 'Back from slide', await state())
     await click('#wizOk'); await click('#wizOk'); await shot('6-scale'); print(nm, 'OK OK', await state())
     await pg.evaluate(f"() => {{ const i = {R}.querySelector('#wb'); i.value = '1007.7'; i.dispatchEvent(new Event('change')); }}"); await pg.wait_for_timeout(500)
-    await click('#wizOk'); await shot('7-last-slide'); print(nm, 'OK', await state())
-    await click('#wizOk'); await shot('8-fit'); print(nm, 'Start', await state())
+    await click('#wizOk'); await shot('7-final-popup'); print(nm, 'OK', await state())
+    await click('#noteOk'); await shot('8-fit'); print(nm, 'Start', await state())
     print(nm, 'errors', errs); await pg.close()
 async def main():
     async with async_playwright() as p:
