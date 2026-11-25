@@ -17,6 +17,22 @@ Rolling back = pasting the previous version's link.
 - Side detection on mountain bikes accepts a single small ring (its cleanest circle can be under 100 mm); the test
   MTB photo was read as non-drive side before, which swapped the Rear / Front labels.
 - Test: tests/mtb.py (Daniel's full-suspension photo, tests/photos/, kept out of git).
+- Bike popup: no explainer under What kind of bike?; Mountain opens WHEELSIZE with Front and Rear toggles
+  (32 / 29 / 27.5 / 26; beads 686 / 622 / 584 / 559). Mixed sizes replace the 29/27.5-only option: the rear tire is
+  the front's width on its own rim. Same toggles in Setup > Photo.
+- First guess sanity check: two circles only count as wheels if each is 6-32% of the photo's long side in radius,
+  within 25% of each other in size, at about the same height and 1.15-2.5 diameters apart, and neither traces as
+  'not found'. Otherwise the tire step starts with two see-through grey circles (Rear, Front) where wheels usually
+  sit; drag the middle dot to move, the edge dot to size, then Trace. The left circle can't pass the right one.
+  The stairs demo now starts this way. Each tire dot carries an R or F.
+- Seat tube: offset by default on gravel and mountain (0 mm to start). The angle handle is now an arc like the
+  steering axis. Padlocks for angle and offset: a locked handle shakes, shows the guide lines and doesn't move.
+  EFF. STA only shows once HT top (the stack) has been placed.
+- Steering axis start by type: road 72 deg / 47 mm offset, gravel 71 / 47, mountain 65 / 44 (start only).
+  First HT bottom guess at the fork's axle to crown (mountain 560, or the picked fork's), HT top 115 above it.
+- Fork axle to crown as a scale reference (mountain only): Setup > Scale > Fork A2C. Pick a fork (Cane Creek HELM
+  MKII 29 at 130-160, 27.5 at 130-170, manufacturer spec) or enter it; Place crown shows the steering axis and HT
+  bottom with an A2C line from the axle's foot. Counts at +/-6 mm. Picking a fork fills the fork offset if empty.
 
 ## v2 (released 2026-11-25: datum-v2.js?v=1795643586)
 - Tan sidewalls: once a dot on a wheel is placed by hand, the trace only looks within 5 mm of the outline through

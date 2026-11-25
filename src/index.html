@@ -81,8 +81,10 @@ __CSS__</style>
         <span id="sideChip"></span></div>
       <div class="sline"><span class="lab">Bike</span>
         <span class="seg" role="group" aria-label="Bike type"><button id="bkRoad" aria-pressed="true">Road</button><button id="bkGravel" aria-pressed="false">Gravel</button><button id="bkMtb" aria-pressed="false">Mountain</button></span></div>
-      <div class="sline" id="wheelsRow"><span class="lab">Wheels</span>
-        <span class="seg" role="group" aria-label="Wheel sizes"><button id="bkSame" aria-pressed="true">Same size</button><button id="bkMixed" aria-pressed="false">29 front, 27.5 rear</button></span></div>
+      <div id="wheelsRow">
+        <div class="sline"><span class="lab">Front wheel</span><span class="seg" role="group" aria-label="Front wheel"><button data-end="f" data-w="32" aria-pressed="false">32</button><button data-end="f" data-w="29" aria-pressed="true">29</button><button data-end="f" data-w="27.5" aria-pressed="false">27.5</button><button data-end="f" data-w="26" aria-pressed="false">26</button></span></div>
+        <div class="sline"><span class="lab">Rear wheel</span><span class="seg" role="group" aria-label="Rear wheel"><button data-end="r" data-w="32" aria-pressed="false">32</button><button data-end="r" data-w="29" aria-pressed="true">29</button><button data-end="r" data-w="27.5" aria-pressed="false">27.5</button><button data-end="r" data-w="26" aria-pressed="false">26</button></span></div>
+      </div>
       <div id="wheelNote"></div>
       <div class="row"><button class="btn small" id="redoTires">Redo tires</button><button class="btn small" id="redoBB">Redo BB</button></div>
     </div>
@@ -95,6 +97,8 @@ __CSS__</style>
         <div class="sref"><span class="nm">Tire <button class="btn small shbtn" id="tireManual" aria-pressed="false">Manual entry</button></span><span class="read" id="tireRead"></span><span class="val"><select id="tireSel" autocomplete="off"></select></span><span class="chk" id="tireChk"></span></div>
         <div class="sref" id="tireManualRow"><span class="nm">Tire OD, measured</span><span class="read"></span><span class="val"><input type="number" id="tireD" step="0.5" min="300" placeholder="mm" autocomplete="off"></span><span></span></div>
         <div class="sref"><span class="nm">Saddle height <button class="btn small shbtn" id="shPlace" aria-pressed="false">Place saddle top</button></span><span class="read" id="shRead"></span><span class="val"><input type="number" id="sh" step="0.5" min="300" placeholder="mm" autocomplete="off"></span><span class="chk" id="shChk"></span></div>
+        <div class="sref" id="forkRow"><span class="nm">Fork A2C <button class="btn small shbtn" id="forkPlace" aria-pressed="false">Place crown</button></span><span class="read" id="forkRead"></span><span class="val"><select id="forkSel" autocomplete="off"></select></span><span class="chk" id="forkChk"></span></div>
+        <div class="sref" id="forkManualRow"><span class="nm">Axle to crown, measured</span><span class="read"></span><span class="val"><input type="number" id="forkA2C" step="0.5" min="300" placeholder="mm" autocomplete="off"></span><span></span></div>
       </div>
       <p class="note">Known: a number you trust, from a tape measure or a geometry chart. Every known value sets the scale, and the photo's reading is shown against it. Saddle height can be entered once the saddle top is placed: press Place saddle top and drag the Top point onto the top of the saddle.</p>
       <div id="scaleOut"></div>
@@ -179,7 +183,6 @@ __CSS__</style>
     <span class="mark">Before tracing</span>
     <h2 id="bikeTitle">What kind of bike?</h2>
     <div id="bikeStep1">
-      <p>Gravel and mountain tires have knobs, so DATUM traces the knob tips and allows a little more spread.</p>
       <div class="startOpts">
         <button class="btn primary" id="bikeRoad">Road</button>
         <button class="btn primary" id="bikeGravel">Gravel</button>
@@ -187,11 +190,9 @@ __CSS__</style>
       </div>
     </div>
     <div id="bikeStep2" style="display:none">
-      <p>Are both wheels the same size?</p>
-      <div class="startOpts">
-        <button class="btn primary" id="bikeSame">Same size</button>
-        <button class="btn primary" id="bikeMixed">Mixed: 29 front, 27.5 rear</button>
-      </div>
+      <div class="wsRow"><span class="lab">Front</span><span class="seg" role="group" aria-label="Front wheel"><button data-end="f" data-w="32" aria-pressed="false">32</button><button data-end="f" data-w="29" aria-pressed="true">29</button><button data-end="f" data-w="27.5" aria-pressed="false">27.5</button><button data-end="f" data-w="26" aria-pressed="false">26</button></span></div>
+      <div class="wsRow"><span class="lab">Rear</span><span class="seg" role="group" aria-label="Rear wheel"><button data-end="r" data-w="32" aria-pressed="false">32</button><button data-end="r" data-w="29" aria-pressed="true">29</button><button data-end="r" data-w="27.5" aria-pressed="false">27.5</button><button data-end="r" data-w="26" aria-pressed="false">26</button></span></div>
+      <div class="startOpts"><button class="btn primary" id="bikeGo">Continue</button></div>
     </div>
     <button class="startClose" id="bikeCancel">Cancel</button>
   </div>
