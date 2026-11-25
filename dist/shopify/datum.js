@@ -2592,6 +2592,9 @@ $('copyPts').onclick = async () => {
 };
 
 
+// which version is running, shown in the footer (Shopify: the line under the tool)
+const DATUM_VERSION = 'v2';
+{ const f = document.querySelector('footer'); if (f) f.textContent = f.textContent.trim() + ' - DATUM ' + DATUM_VERSION; }
 sizeCanvas();
 loadImage(EXAMPLES.tilted.src, EXAMPLES.tilted);
 

@@ -3,3 +3,5 @@ __pycache__/
 *.png
 !examples/*.png
 .DS_Store
+tests/out/
+tests/site/

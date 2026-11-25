@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DATUM sandbox - ARTEFACT</title>
+<link rel="icon" href="data:,">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@125,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* stands in for the Horizon Canvas theme around DATUM; also clashes on purpose (.btn, button, .panel) so leaks show */
+  html, body { margin: 0; background: #161513; color: #E6E1D3; font: 15px/1.5 "IBM Plex Mono", monospace; }
+  .btn, button { border-radius: 14px; font-size: 22px; color: #ff4fd8; } .panel { outline: 3px dashed #ff4fd8; }
+  .store-header { height: 66px; display: flex; align-items: center; justify-content: space-between; padding: 0 40px; background: #1b1a17; }
+  .store-header .logo { font: 700 26px "Archivo", sans-serif; font-stretch: 125%; letter-spacing: .02em; }
+  .store-header nav { display: flex; gap: 22px; font-size: 14px; } .store-header nav a { color: inherit; text-decoration: none; }
+  .note { background: #2a2018; color: #C46B4E; font-size: 12px; padding: 6px 40px; letter-spacing: .08em; text-transform: uppercase; }
+  .store-footer { padding: 28px 40px; font-size: 13px; color: #A8A396; }
+  datum-app { display: block; height: calc(100svh - 66px - 31px); min-height: 640px; }
+  @media (max-width: 900px) { .store-header { padding: 0 16px; } .store-header nav { display: none; } .note { padding: 6px 16px; } datum-app { height: auto; min-height: 100svh; } }
+</style></head>
+<body>
+<header class="store-header"><span class="logo">ARTEFACT</span><nav><a href="#">ETERNA</a><a href="#">CONTACT</a><a href="#">ABOUT</a><a href="#">JOURNAL</a></nav></header>
+<div class="note">Sandbox: the same datum.js the store runs, in a stand-in for the store page</div>
+<datum-app data-ex-tilted="examples/tilted.jpg" data-ex-dead="examples/dead-on.jpg" data-ex-stairs="examples/stairs.jpg"
+  data-disclaimer="Beta: estimates from a photo. Confirm with a tape measure before ordering."></datum-app>
+<footer class="store-footer">&copy; 2026 ARTEFACT, Powered by Shopify</footer>
+<script src="datum.js" defer></script>
+</body></html>
