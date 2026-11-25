@@ -1,7 +1,7 @@
-"""Build dist/shopify/photo-fit.js: the whole app as one script that mounts itself in a shadow root, so the Shopify
-theme's styles and the app's styles can't touch each other. Used by sections/photo-fit.liquid in the theme.
+"""Build dist/shopify/datum.js: the whole app as one script that mounts itself in a shadow root, so the Shopify
+theme's styles and the app's styles can't touch each other. Used by sections/datum.liquid in the theme.
 
-The host element <photo-fit-app> passes in:
+The host element <datum-app> passes in:
   data-ex-tilted / data-ex-dead / data-ex-stairs   example photo URLs (same-origin /cdn/shop/files/... from image pickers)
   data-disclaimer                                  the line shown under the tool
 """
@@ -24,7 +24,7 @@ for k, f in [('tilted', 'tilted'), ('dead', 'dead-on'), ('stairs', 'stairs')]:
     a = f"src: 'examples/{f}.jpg'"
     assert app.count(a) == 1, a
     app = app.replace(a, f"src: EX.{k} || 'examples/{f}.jpg'")
-js = """/* ARTEFACT Photo Fit (beta). Built by build_shopify.py from github.com/daniel-artefact/photo-fit. */
+js = """/* ARTEFACT DATUM (beta). Built by build_shopify.py from github.com/daniel-artefact/datum. */
 (() => {
 const CSS = %s;
 const TPL = %s;
@@ -40,7 +40,7 @@ function run(root, host) {
 %s
 %s
 }
-class PhotoFitApp extends HTMLElement {
+class DatumApp extends HTMLElement {
   connectedCallback() {
     if (this.shadowRoot) return;
     const root = this.attachShadow({ mode: 'open' });
@@ -50,10 +50,10 @@ class PhotoFitApp extends HTMLElement {
     run(root, this);
   }
 }
-if (!customElements.get('photo-fit-app')) customElements.define('photo-fit-app', PhotoFitApp);
+if (!customElements.get('datum-app')) customElements.define('datum-app', DatumApp);
 })();
 """ % (json.dumps(css), json.dumps(tpl), core, app)
 # plain ASCII, so the file reads the same whatever charset the host serves it with (° would show as Â° otherwise)
 js = ''.join(ch if ord(ch) < 128 else ''.join('\\u%04x' % u for u in __import__('struct').unpack('<' + 'H' * (len(ch.encode('utf-16-le')) // 2), ch.encode('utf-16-le'))) for ch in js)
-(out / 'photo-fit.js').write_text(js)
-print('built dist/shopify/photo-fit.js', len(js), 'bytes')
+(out / 'datum.js').write_text(js)
+print('built dist/shopify/datum.js', len(js), 'bytes')
