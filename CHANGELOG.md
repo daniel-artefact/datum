@@ -3,7 +3,7 @@
 Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATUM section's Script URL.
 Rolling back = pasting the previous version's link.
 
-## v2 (in progress)
+## v2 (released 2026-11-25: datum-v2.js?v=1795643586)
 - Tan sidewalls: once a dot on a wheel is placed by hand, the trace only looks within 5 mm of the outline through
   the dots and takes the edge nearest it. Before, the strong tan/black edge inside the tread pulled the trace up to
   11 mm inward even with the dots on the tread (test: tests/tanwall.py, brick-wall Ti bike; now within 1.5 mm).
