@@ -1810,7 +1810,8 @@ function wizClick(x, y) {
 }
 $('wizOk').onclick = wizOk;
 $('wizBack').onclick = () => { if (S.wizInfo) { S.wizInfo = false; renderWiz(); } else if (S.wiz > 0) wizGo(S.wiz - 1); }; // from a slide, back to its step
-$('wizRestart').onclick = () => { S.setupDone = false; wizGo(0); };
+$('redoTires').onclick = () => { S.setupDone = false; wizGo(0); };
+$('redoBB').onclick = () => { S.setupDone = false; wizGo(WIZ.findIndex(s => s.k === 'bb')); };
 for (const b of document.querySelectorAll('#tabbar button')) b.onclick = () => { S.tab = b.dataset.tab; S.view.mode = 'flat'; afterChange(); };
 $('chartSel').onchange = e => { S.chartId = e.target.value; afterChange(); };
 $('geoOut').addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.k; if (!k) return; const v = parseFloat(e.target.value); if (v > 0) S.customChart[k] = v; else delete S.customChart[k]; afterChange(); });

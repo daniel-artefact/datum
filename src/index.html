@@ -80,9 +80,7 @@ __CSS__</style>
         <span class="seg" role="group" aria-label="Side"><button id="sideDrive" aria-pressed="true">Drive side</button><button id="sideNds" aria-pressed="false">Non-drive side</button></span>
         <span id="sideChip"></span></div>
       <div id="wheelNote"></div>
-      <div class="row"><button class="btn small" id="wizRestart">Redo tires and BB</button></div>
-      <div class="fields"><label class="f">Seat tube <span class="seg" role="group" aria-label="Seat tube"><button id="stStraight" aria-pressed="true">Straight</button><button id="stOffset" aria-pressed="false">Offset</button></span></label></div>
-      <p class="note">Offset (experimental): for bent seat tubes, common on MTB and gravel frames, where the post's line passes ahead of the BB. A left/right slider on the seat tube line sets the offset A. Seat angle then reads the effective angle at stack height, as on geometry charts.</p>
+      <div class="row"><button class="btn small" id="redoTires">Redo tires</button><button class="btn small" id="redoBB">Redo BB</button></div>
     </div>
     <div class="panel" data-tab="setup" id="scalePanel">
       <h2>Scale</h2>
@@ -97,12 +95,16 @@ __CSS__</style>
       <p class="note">Known: a number you trust, from a tape measure or a geometry chart. Every known value sets the scale, and the photo's reading is shown against it. Saddle height can be entered once the saddle top is placed: press Place saddle top and drag the Top point onto the top of the saddle.</p>
       <div id="scaleOut"></div>
     </div>
-    <div class="panel" data-tab="setup" id="bbPanel">
+    <div class="panel" data-tab="setup" id="seatPanel">
+      <h2>Seat tube</h2>
+      <div class="fields"><label class="f">Seat tube <span class="seg" role="group" aria-label="Seat tube"><button id="stStraight" aria-pressed="true">Straight</button><button id="stOffset" aria-pressed="false">Offset</button></span></label></div>
+    </div>
+    <div class="panel" data-tab="step" id="bbPanel">
       <h2>Bottom bracket</h2>
       <div id="bbOut"></div>
       <div class="row"><button class="btn small" id="bbAuto">Find automatically</button></div>
     </div>
-    <div class="panel" data-tab="setup">
+    <div class="panel" data-tab="none" hidden>
       <details class="adv">
         <summary>Camera details</summary>
         <div>
@@ -117,22 +119,6 @@ __CSS__</style>
           <p id="focalNote"></p>
           <label class="f" style="flex-direction:row;align-items:center;gap:8px">Click precision, px <input type="number" id="clickSig" value="1" step="0.25" min="0.25" style="width:64px"></label>
         </div>
-      </details>
-    </div>
-    <div class="panel" data-tab="setup">
-      <details>
-        <summary>How it works, and what it cannot see</summary>
-        <ul>
-          <li>The outer edge of each tire is traced along several hundred rays. Two equal circles in one plane pin down the camera: the squash of each gives the angle, the size difference gives the perspective. The photo is re-projected square-on and leveled.</li>
-          <li>The photo grade uses the camera angle, how much of each tire was traced, whether the front tire is out of round compared with the rear after correction (a turned wheel), and the resolution. The thresholds are provisional until phone photos have been tested.</li>
-          <li>Scale: the tire OD is estimated from the tire's size against its rim, assuming a 700c rim. Every number marked Actual gives its own mm per pixel; they are combined, weighted by how precise each is, and each is shown against what the photo reads.</li>
-          <li>Anything that sits out from the frame centerline, such as the chainring, crank bolt or axle end caps, appears shifted when the camera is not square. The tool corrects the bottom bracket for the camera angle, assuming the outer chainring sits about 48 mm out (the crank bolt about 70 mm on the non-drive side), and takes the axles from the tire outlines instead of the end caps. If the circle around the BB is not found, you drag one onto it by hand.</li>
-          <li>The seat tube angle is traced from the two edges of the seatpost and seat tube. The saddle top is where that line leaves the saddle's outline against the background.</li>
-          <li>The ± on each number comes from 200 random re-runs that jiggle the clicks, the tire fit, the camera solution and the scale. It does not include an error in the seat tube angle or in the chainring depth.</li>
-          <li>Which side the photo shows is judged from which way the bike faces: a drive-side photo faces right. Non-drive-side photos have not been tested on a real photo yet.</li>
-          <li>Not modeled: lens distortion, tires of different size front and rear, 650b rims for the tire estimate, light-colored tires, or a saddle the same color as the wall behind it.</li>
-          <li>Points and settings are remembered in this browser per photo.</li>
-        </ul>
       </details>
     </div>
 

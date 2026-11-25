@@ -4,6 +4,8 @@ Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATU
 Rolling back = pasting the previous version's link.
 
 ## v2 (in progress)
+- Setup tab trimmed: Photo (grade, side, Redo tires / Redo BB), then Scale, then Seat tube (straight / offset, no
+  description). The Bottom bracket panel only shows inside the BB setup step. Camera details and How it works removed.
 - Before you start is the final popup after the scale step (new copy: don't get lost in the numbers; transferring a
   fit between bikes is never exact, expect +/-10 mm), with Start / Go back.
 - Tire trace quality judged in millimeters, not pixels (a sharper photo was judged harder): sized by a 700x30 tire
