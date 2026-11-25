@@ -4,6 +4,9 @@ Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATU
 Rolling back = pasting the previous version's link.
 
 ## v2 (in progress)
+- Tan sidewalls: once a dot on a wheel is placed by hand, the trace only looks within 5 mm of the outline through
+  the dots and takes the edge nearest it. Before, the strong tan/black edge inside the tread pulled the trace up to
+  11 mm inward even with the dots on the tread (test: tests/tanwall.py, brick-wall Ti bike; now within 1.5 mm).
 - Setup tab trimmed: Photo (grade, side, Redo tires / Redo BB), then Scale, then Seat tube (straight / offset, no
   description). The Bottom bracket panel only shows inside the BB setup step. Camera details and How it works removed.
 - Before you start is the final popup after the scale step (new copy: don't get lost in the numbers; transferring a

@@ -110,7 +110,7 @@ async function loadImage(src, preset) {
     if (saved && saved.geo) {
       for (const k of SAVE_KEYS) if (saved[k] !== undefined) S[k] = saved[k];
       if (S.wheelsHand && S.tirePts) S.wheelInit = S.tirePts.map(ptsToEll);
-      if (S.wheelsHand && S.wheelInit) { S.wheels = S.wheelInit.map(e => Core.fitWheelHand(S.img.gray, S.img.W, S.img.H, e)); S.blocked = S.wheels.some(w => !w); }
+      if (S.wheelsHand && S.wheelInit) { S.wheels = S.wheelInit.map((e, k) => handTrace(k)); S.blocked = S.wheels.some(w => !w); }
       for (const r of S.measures) S.uid = Math.max(S.uid, (parseInt(String(r.id).slice(1)) || 0) + 1);
     } else if (preset) {
       for (const k in preset.geo) { S.geo[k] = { p: preset.geo[k].slice(), depth: 0, src: 'set' }; S.touched[k] = true; } // the owner's own clicks
@@ -221,10 +221,18 @@ function splinePath(P, map) {
   }
   return out;
 }
+// Daniel 2026-11-25: a dot a person placed is good to about 5 mm. Once any dot on a wheel is placed, the trace only
+// looks within 5 mm of the outline through the dots, so a tan sidewall just inside the tread can't pull it off.
+const HAND_TOL_MM = 5;
+function handTrace(k) {
+  const e = S.wheelInit[k], placed = S.tirePlaced && S.tirePlaced[k] && S.tirePlaced[k].some(Boolean);
+  const tol = placed ? HAND_TOL_MM * 2 * Math.max(e.a, e.b) / TRACE.tireMm : 0;
+  return Core.fitWheelHand(S.img.gray, S.img.W, S.img.H, e, tol);
+}
 function retraceWheel(k) {
   const { gray, W, H } = S.img;
   S.wheelInit[k] = ptsToEll(S.tirePts[k]);
-  S.wheels[k] = Core.fitWheelHand(gray, W, H, S.wheelInit[k]);
+  S.wheels[k] = handTrace(k);
   S.wheelsHand = true;
   // everything found from the old wheels is found again: BB, seat tube, and any point not placed by hand
   for (const g of ['st', 'sd', 'sr', 'sn', 'bar']) if (S.geo[g] && S.geo[g].src !== 'set') delete S.geo[g];

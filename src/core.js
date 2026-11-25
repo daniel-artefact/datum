@@ -253,18 +253,24 @@ const Core = (() => {
     return out;
   }
   // init: a circle {cx, cy, r} from auto-detection, or an ellipse {cx, cy, a, b, phi} outlined by hand.
-  function fitWheel(gray, w, h, init, win) {
+  // tol (px): the outline came from dots a person placed, trusted to a few mm. Only edges within tol of it count, and
+  // the edge nearest it wins, so a strong edge just inside (a tan sidewall) can't pull the trace off the tread.
+  function fitWheel(gray, w, h, init, win, tol) {
     // a hand outline is searched in a narrow band, taking the edge nearest the outline: the rim lies inside the tire
     // and the wheel's shadow can lie outside it, so the outline decides which edge is the tire
+    const inBand0 = p => Math.abs(ellDist(init, p.x, p.y)) <= tol;
     const isEll = init.a != null, rAt = isEll ? th => ellRadius(init, th) : () => init.r;
-    let pts = traceRays(gray, w, h, init.cx, init.cy, rAt, r => (isEll ? 0.04 : (win || 0.13)) * r, 360, false, isEll);
+    // with tol, each ray also samples a kernel's width past the band so edges at the band's ends can still be found
+    let pts = traceRays(gray, w, h, init.cx, init.cy, rAt, r => tol ? tol + 2.5 * Math.max(1.2, r / 180) + 2 : (isEll ? 0.04 : (win || 0.13)) * r, 360, !!tol, isEll);
+    if (tol) pts = pts.filter(inBand0);
     if (pts.length < 40) return null;
     const strMed = median(pts.map(p => p.str));
     pts = pts.filter(p => p.str > 0.3 * strMed);
     const rMed = median(pts.map(p => p.r));
     const mad0 = 1.4826 * median(pts.map(p => Math.abs(p.r - rMed)));
     const r0 = isEll ? (init.a + init.b) / 2 : init.r;
-    let keep = isEll ? pts.filter(p => Math.abs(ellDist(init, p.x, p.y)) < 0.045 * r0)
+    const inBand = p => !tol || Math.abs(ellDist(init, p.x, p.y)) <= tol;
+    let keep = isEll ? pts.filter(p => Math.abs(ellDist(init, p.x, p.y)) < (tol || 0.045 * r0))
       : pts.filter(p => Math.abs(p.r - rMed) < Math.max(3 * mad0, 0.012 * init.r));
     let ell = null;
     const robust = (all) => {
@@ -286,7 +292,8 @@ const Core = (() => {
     // pass 2: narrow search along the fitted outline
     for (let pass = 0; pass < 2; pass++) {
       const e0 = ell;
-      let p2 = traceRays(gray, w, h, e0.cx, e0.cy, th => ellRadius(e0, th), r => Math.max(5, 0.03 * r), 480, false, isEll);
+      let p2 = traceRays(gray, w, h, e0.cx, e0.cy, th => ellRadius(e0, th), r => tol ? tol + 2.5 * Math.max(1.2, r / 180) + 2 : Math.max(5, 0.03 * r), 480, !!tol, isEll);
+      p2 = p2.filter(inBand);
       if (p2.length < 60) break;
       const sm = median(p2.map(p => p.str));
       p2 = p2.filter(p => p.str > 0.3 * sm);
@@ -303,7 +310,8 @@ const Core = (() => {
   // Trace from a hand outline. People are off by a few percent, so trace from sizes within ±3% of it and keep the
   // largest clean fit. A trace onto the wheel's shadow fits badly (rms over 1 px on test photos vs under 0.6 px
   // on the tire); the rim can fit cleanly too, but it is smaller.
-  function fitWheelHand(gray, w, h, ell) {
+  function fitWheelHand(gray, w, h, ell, tol) {
+    if (tol) return fitWheel(gray, w, h, { cx: ell.cx, cy: ell.cy, a: ell.a, b: ell.b, phi: ell.phi || 0 }, null, tol);
     // two rounds: the second starts from the first result, which fixes an outline drawn off-center
     const r1 = fitWheelHandOnce(gray, w, h, ell);
     if (!r1) return null;
