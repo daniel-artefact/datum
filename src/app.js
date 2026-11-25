@@ -1,0 +1,1825 @@
+'use strict';
+const $ = id => document.getElementById(id);
+const DEG = 180 / Math.PI;
+const COL = { guess: '#A8A396', wheel: '#E6E1D3', crank: '#E8B04A', geo: '#F2EEE4', fit: '#8FD4BE', meas: '#E58A6A', grid: 'rgba(230,225,211,.25)' };
+const GEO = [
+  { k: 'bb', grp: 'bb', name: 'Bottom bracket', short: 'BB' },
+  { k: 'st', grp: 'seat', name: 'Seat tube point', short: 'ST' },
+  { k: 'sd', grp: 'seat', name: 'Saddle top', short: 'Top' },
+  { k: 'sn', grp: 'fit', name: 'Saddle nose', short: 'Nose', hint: 'Click the front tip of the saddle.' },
+  { k: 'sr', grp: 'fit', name: 'Saddle rear', short: 'Rear', hint: 'Click the rearmost point of the saddle.' },
+  { k: 'bar', grp: 'fit', name: 'Stem clamp center', short: 'Bar', hint: 'Click the center of the handlebar where the stem clamps it.' },
+  { k: 'ht', grp: 'frame', name: 'Head tube, top face', short: 'HT top', hint: 'Click the top face of the head tube. The point stays on the steering axis.' },
+  { k: 'hb', grp: 'frame', name: 'Head tube, bottom face', short: 'HT bottom', hint: 'Click the bottom face of the head tube. The point stays on the steering axis.' },
+  { k: 'stt', grp: 'frame', name: 'Seat tube, top face', short: 'ST top', hint: 'The top face of the seat tube. The point stays on the seat tube line.' },
+];
+// Names and definitions follow the ARTEFACT geometry engine (artefact-geo, src/engine.js). Daniel 2026-11-25: match the engine.
+const ROWS = [
+  ['stack', 'Stack', 'mm'], ['reach', 'Reach', 'mm'], ['headTube', 'Head tube', 'mm'], ['headAngle', 'Head angle', '°'],
+  ['seatAngle', 'Seat angle', '°'], ['seatAngleActual', 'Seat angle, actual (seat axis)', '°'], ['stOffsetA', 'Seat tube offset A', 'mm'],
+  ['ett', 'Eff. top tube', 'mm'], ['seatTube', 'Seat tube (c-t)', 'mm'], ['bbDrop', 'BB drop', 'mm'], ['chainstay', 'Chainstay', 'mm'],
+  ['sec', 'Handling'],
+  ['wheelbase', 'Wheelbase', 'mm'], ['frontCentre', 'Front center (direct)', 'mm'], ['rearCentre', 'Rear center (level)', 'mm'],
+  ['forkLength', 'Fork length', 'mm'], ['forkOffset', 'Fork offset', 'mm'], ['trail', 'Trail', 'mm'], ['bbHeight', 'BB height', 'mm'],
+];
+// Released ETERNA sizes, solved by the geometry engine (ETERNA_NOW, verified against the signed factory drawings). The 50 is a draft
+// and stays out. BB height is left out: it depends on the tires in the photo, not the frame.
+const ETERNA = {"52": {"wheelbase": 979.2, "chainstay": 412, "rearCentre": 404.5, "frontCentre": 579.9, "bbDrop": 78, "stack": 549.5, "reach": 372, "headTube": 140, "headAngle": 72, "seatAngle": 74, "ett": 529.6, "seatTube": 522, "forkLength": 370, "forkOffset": 47, "trail": 62.7}, "54": {"wheelbase": 983.8, "chainstay": 412, "rearCentre": 404.5, "frontCentre": 584.5, "bbDrop": 78, "stack": 566.2, "reach": 378, "headTube": 155, "headAngle": 72.7, "seatAngle": 74, "ett": 540.4, "seatTube": 538.5, "forkLength": 370, "forkOffset": 47, "trail": 58.2}, "56": {"wheelbase": 992.9, "chainstay": 412, "rearCentre": 405.1, "frontCentre": 592.5, "bbDrop": 75, "stack": 577.5, "reach": 382, "headTube": 170, "headAngle": 72.7, "seatAngle": 74, "ett": 547.6, "seatTube": 549.5, "forkLength": 370, "forkOffset": 47, "trail": 58.2}, "58": {"wheelbase": 1008.3, "chainstay": 412, "rearCentre": 405.1, "frontCentre": 607.8, "bbDrop": 75, "stack": 601.4, "reach": 390, "headTube": 195, "headAngle": 72.7, "seatAngle": 74, "ett": 562.5, "seatTube": 572.7, "forkLength": 370, "forkOffset": 47, "trail": 58.2}, "60": {"wheelbase": 1024.7, "chainstay": 412, "rearCentre": 405.1, "frontCentre": 624.1, "bbDrop": 75, "stack": 625.3, "reach": 399, "headTube": 220, "headAngle": 72.7, "seatAngle": 74, "ett": 578.3, "seatTube": 595.9, "forkLength": 370, "forkOffset": 47, "trail": 58.2}};
+const DRAWING_58 = ETERNA['58'];
+// Geometry charts to compare against. Verified only: a manufacturer's own chart or ARTEFACT's own drawing.
+// This list is where the database of verified models plugs in later.
+const devinci = (ST, SA, HA, TT, reach, WB, stack, HT) => ({ seatTube: ST, seatAngle: SA, headAngle: HA, ett: TT, reach, chainstay: 430, wheelbase: WB, bbHeight: 283, stack, headTube: HT });
+const CHARTS = [
+  ...Object.keys(ETERNA).map(k => ({ id: 'eterna' + k, name: 'ARTEFACT ETERNA ' + k, src: 'ARTEFACT geometry engine (ETERNA_NOW)', v: ETERNA[k] })),
+  { id: 'hatchet20-xs', name: 'Devinci Hatchet Carbon 2020: XS', src: 'devinci.com geometry chart', v: devinci(400, 74, 70, 530, 381, 1022, 519, 100) },
+  { id: 'hatchet20-s', name: 'Devinci Hatchet Carbon 2020: S', src: 'devinci.com geometry chart', v: devinci(440, 74, 70.5, 545, 388, 1035, 544, 130) },
+  { id: 'hatchet20-m', name: 'Devinci Hatchet Carbon 2020: M', src: 'devinci.com geometry chart', v: devinci(490, 73.5, 71, 565, 395, 1046, 575, 155) },
+  { id: 'hatchet20-l', name: 'Devinci Hatchet Carbon 2020: L', src: 'devinci.com geometry chart', v: devinci(530, 73, 71, 586, 402, 1062, 603, 185) },
+  { id: 'hatchet20-xl', name: 'Devinci Hatchet Carbon 2020: XL', src: 'devinci.com geometry chart', v: devinci(570, 73, 71.5, 601, 409, 1073, 629, 210) },
+];
+const TIRES = [['700x25', 672], ['700x28', 678], ['700x30', 682], ['700x32', 686], ['700x35', 692], ['700x38', 698], ['700x40', 702], ['700x45', 712], ['700x50', 722],
+  ['650bx47', 678], ['650bx50', 684]];
+const chartRef = () => S.chartId === 'custom' ? S.customChart : (CHARTS.find(ch => ch.id === S.chartId) || {}).v || null;
+// Saddle, bar and frame points are reconstructed from the owner's own clicks
+const EXAMPLES = {
+  tilted: { src: 'examples/tilted.jpg', wb: 1007.7, wbTol: 2, D: 686, tolD: 3, drawing: DRAWING_58,
+    geo: { sn: [504.3, 840], sr: [341.5, 842], bar: [892.9, 886], ht: [835, 933.9], hb: [872.8, 1060.8] } },
+  dead: { src: 'examples/dead-on.jpg', wb: 1007.7, wbTol: 2, D: 686, tolD: 3, drawing: DRAWING_58,
+    geo: { sn: [851.5, 463.3], sr: [703.6, 462.6], bar: [1216.7, 515.2], ht: [1160.1, 561.9], hb: [1194.8, 672.2] } },
+  // outdoors on wooden steps: the hard case for tracing the tires (dark steps and shadows behind them)
+  stairs: { src: 'examples/stairs.jpg', wb: 1007.7, drawing: DRAWING_58, geo: {} },
+  // which points a person has grabbed: guesses pulse on the photo until then
+
+};
+
+const S = {
+  img: null, wheels: [null, null], inits: [null, null], tireAct: null, tireMode: 'est', tireEst: { D: 686, src: 'default' }, wb: null, wbMode: 'est', sh: null, shMode: 'est', forkOffset: null, sWork: null,
+  side: 'drive', sideSet: null, sideAuto: null, sideKey: '', blocked: false, bbCircle: null, bbAdjust: false, rimKey: '',
+  flatten: true, focalMode: 'auto', f35: null, exif: null, tilt: null, tiltKey: '', rect: null, rectRaw: null,
+  refs: [], geo: {}, measures: [], clickSig: 1, scale: null, vals: null, mc: null,
+  bbMode: 'auto', bbDepth: 48, crank: null, crankDet: null, crankKey: '', staMode: 'auto', staManual: 73.5, sta: null, auto: {},
+  sadRef: 'mid', dropTo: 'top', barD: 31.8, stOff: false, stA: 0, lowerHS: 1, lockA: false, lockX: false, ringOff: 50, boltOff: 70, sideAsked: false, fg: null, fgKey: '',
+  view: { mode: 'flat', z: 1, ox: 0, oy: 0 }, tool: null, pending: null, drag: null, hover: null,
+  show: { wheel: true, crank: true, sta: true, grid: false }, adjust: false, flat: null, flatKey: '', handles: [], locked: [], shake: null, uid: 1, confirmed: {}, wiz: null,
+};
+const cv = $('cv'), loupe = $('loupe'), lctx = loupe.getContext('2d');
+let ctx = cv.getContext('2d'); // draw() paints here; the magnifier borrows it to paint the same overlay zoomed in
+const fmt = (v, d = 1) => (v == null || !isFinite(v)) ? '–' : v.toFixed(d);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const frontRight = () => S.side === 'drive';
+// tolerances, mm: measured with a tape vs estimated from the rim
+const TOL = { tireSize: 5, tireAct: 2, tireRim: 4, tireDefault: 10, wb: 2, sh: 3 };
+const tireD = () => S.tireMode === 'actual' && S.tireAct > 0 ? S.tireAct : S.tireEst.D;
+const tireTol = () => S.tireMode === 'actual' && S.tireAct > 0 ? (S.tireSel && S.tireSel !== 'manual' ? TOL.tireSize : TOL.tireAct) : (S.tireEst.src === 'rim' ? TOL.tireRim : TOL.tireDefault);
+const SAVE_KEYS = ['ringOff', 'boltOff', 'sideAsked', 'lockA', 'lockX', 'stOff', 'stA', 'lowerHS', 'base', 'tireSel', 'setupDone', 'geoShown', 'touched', 'chartId', 'customChart', 'steer', 'tirePlaced', 'tirePts', 'wheelInit', 'wheelsHand', 'geo', 'measures', 'bbMode', 'bbCircle', 'sideSet', 'wb', 'wbMode', 'sh', 'shMode', 'tireAct', 'tireMode', 'forkOffset', 'staMode', 'staManual', 'sadRef', 'dropTo', 'barD'];
+// how far the located part sits out from the frame centerline: outer chainring about 48 mm, crank bolt about 70 mm (not shown to the user)
+const depthFor = () => S.side === 'drive' ? (S.ringOff > 0 ? S.ringOff : 50) : (S.boltOff > 0 ? S.boltOff : 70); // Daniel 2026-11-25: chainring about 50 mm off the centerline
+
+// ---------- loading ----------
+async function loadImage(src, preset) {
+  $('busy').style.display = 'flex';
+  await new Promise(r => setTimeout(r, 20));
+  try {
+    let buf, blob;
+    if (typeof src === 'string') { const r = await fetch(src); buf = await r.arrayBuffer(); blob = new Blob([buf], { type: 'image/jpeg' }); }
+    else { buf = await src.arrayBuffer(); blob = src; }
+    const url = URL.createObjectURL(blob), im = new Image();
+    im.src = url; await im.decode();
+    const k = Math.min(1, 3000 / Math.max(im.naturalWidth, im.naturalHeight));
+    const W = Math.round(im.naturalWidth * k), H = Math.round(im.naturalHeight * k);
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const cx = c.getContext('2d', { willReadFrequently: true }); cx.drawImage(im, 0, 0, W, H);
+    URL.revokeObjectURL(url);
+    const rgba = cx.getImageData(0, 0, W, H).data;
+    S.img = { canvas: c, W, H, rgba, gray: Core.toGray(rgba, W, H) };
+    S.exif = Core.exifFocal(buf);
+    const guess = S.exif ? (S.exif.focal35 || S.exif.focal) : null;
+    Object.assign(S, { f35: guess ? Math.round(guess) : null, focalMode: 'auto', wheels: [null, null], inits: [null, null], tilt: null, tiltKey: '', rect: null,
+      refs: [], geo: {}, measures: [], tool: null, pending: null, adjust: false, flat: null, flatKey: '', fg: null, fgKey: '', crankKey: '', mc: null,
+      tireSel: '', shPlace: false, setupDone: false, geoShown: false, sideAsked: false, hist: null, base: {}, touched: {}, chartId: '', customChart: {}, tab: 'fit', steer: null, wiz: null, bbMode: 'auto', bbDepth: 48, bbCircle: null, bbAdjust: false, side: 'drive', sideSet: null, sideAuto: null, sideKey: '', rimKey: '', tireEst: { D: 686, src: 'default' },
+      staMode: 'auto', staManual: 73.5, wb: null, wbMode: 'est', sh: null, shMode: 'est', tireAct: null, tireMode: 'est', forkOffset: null });
+    $('focalNote').textContent = S.exif
+      ? `The file says ${fmt(guess, 0)} mm${S.exif.focal35 ? ' (35 mm-equivalent)' : ''}. That is used as a starting guess, since crops and smaller sensors change the effective value.`
+      : 'No focal length in the file. A long lens leaves little perspective to measure, and then this setting hardly matters.';
+    findWheels();
+    S.preset = preset || null; S.chartId = preset && preset.drawing ? 'eterna58' : '';
+    S.storeKey = 'bpm3:' + (preset ? preset.src : src.name + ':' + src.size);
+    S.src = src;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(S.storeKey) || 'null'); } catch (e) {}
+    if (saved && saved.geo) {
+      for (const k of SAVE_KEYS) if (saved[k] !== undefined) S[k] = saved[k];
+      if (S.wheelsHand && S.tirePts) S.wheelInit = S.tirePts.map(ptsToEll);
+      if (S.wheelsHand && S.wheelInit) { S.wheels = S.wheelInit.map(e => Core.fitWheelHand(S.img.gray, S.img.W, S.img.H, e)); S.blocked = S.wheels.some(w => !w); }
+      for (const r of S.measures) S.uid = Math.max(S.uid, (parseInt(String(r.id).slice(1)) || 0) + 1);
+    } else if (preset) {
+      for (const k in preset.geo) { S.geo[k] = { p: preset.geo[k].slice(), depth: 0, src: 'set' }; S.touched[k] = true; } // the owner's own clicks
+      if (preset.geo.ht && preset.geo.hb) S.touched.steer = true;
+      Object.assign(S, { wb: preset.wb, wbMode: 'actual' });
+    }
+    S.view.mode = S.blocked ? 'orig' : 'flat';
+    recompute();
+    // Auto-detection counts as good only if both tires trace cleanly AND agree after the camera correction (the
+    // front tire no more out of round than the rear). A trace on the wrong edge of one tire fails the second test.
+    if (!saved || !saved.tirePlaced) {
+      const a = autoCheck(); S.autoGood = a.ok; S.autoWhy = a.why;
+      if (S.autoGood) S.tirePlaced = S.tirePlaced.map(r => r.map(() => true));
+    }
+    syncInputs(); fitView(); renderAll();
+    banner('');
+    S.wiz = null;
+    wizGo(S.setupDone ? null : 0);
+  } catch (e) {
+    banner('That file could not be read as a photo. Try a JPEG or PNG.');
+    console.error(e);
+  }
+  $('busy').style.display = 'none';
+}
+function syncInputs() {
+  $('f35').value = S.f35 || ''; $('focalMode').value = S.focalMode; $('f35').disabled = S.focalMode !== 'fixed';
+  $('wb').value = S.wb || ''; $('sh').value = S.sh || ''; $('forkOff').value = S.forkOffset || '';
+  const sel = $('tireSel');
+  if (!sel.options.length) sel.innerHTML = '<option value="">Pick a size</option>' + TIRES.map(([n, od]) => `<option value="${n}">${n}: OD ${od}</option>`).join('');
+  if (S.tireAct > 0 && !S.tireSel) S.tireSel = 'manual'; // saved before the size list existed
+  if (S.tireSel && S.tireSel !== 'manual' && !(S.tireAct > 0)) S.tireSel = '';
+  sel.value = S.tireSel && S.tireSel !== 'manual' ? S.tireSel : '';
+  $('tireManual').setAttribute('aria-pressed', String(S.tireSel === 'manual'));
+  $('tireD').value = S.tireSel === 'manual' && S.tireAct ? S.tireAct : '';
+  $('tireManualRow').style.display = S.tireSel === 'manual' ? '' : 'none';
+  for (const b of document.querySelectorAll('.sref .seg button')) b.setAttribute('aria-pressed', String(S[b.dataset.ref + 'Mode'] === b.dataset.m));
+  $('sideDrive').setAttribute('aria-pressed', String(S.side === 'drive')); $('sideNds').setAttribute('aria-pressed', String(S.side === 'nds'));
+  $('staManual').value = S.sta ? +S.sta.angle.toFixed(1) : S.staManual;
+  $('barD').value = S.barD;
+  $('stStraight').setAttribute('aria-pressed', String(!S.stOff)); $('stOffset').setAttribute('aria-pressed', String(!!S.stOff)); $('lowerHS').value = S.lowerHS ?? 1;
+}
+// Each tire has an outline (an ellipse in the photo). Auto-detection fills it in; the person can drag it.
+// The outline only tells the tracer where to look: the measurement is always the traced tire edge.
+function findWheels() {
+  const { gray, W, H } = S.img;
+  const det = Core.detectWheels(gray, W, H);
+  S.wheels = det ? det.map(d => Core.fitWheel(gray, W, H, d)) : [null, null];
+  S.wheelInit = [0, 1].map(k => S.wheels[k] ? { cx: S.wheels[k].ell.cx, cy: S.wheels[k].ell.cy, a: S.wheels[k].ell.a, b: S.wheels[k].ell.b, phi: S.wheels[k].ell.phi }
+    : det ? { cx: det[k].cx, cy: det[k].cy, a: det[k].r, b: det[k].r, phi: 0 } : { cx: W * (k ? 0.7 : 0.3), cy: H * 0.62, a: W * 0.13, b: W * 0.13, phi: 0 });
+  S.tirePts = S.wheelInit.map(ellPts);
+  S.tirePlaced = [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]].map(r => r.map(() => false));
+  S.autoGood = false; S.autoWhy = [];
+  S.wheelsHand = false;
+  S.blocked = S.wheels.some(w => !w);
+  S.adjust = false;
+}
+// Can the automatic tire traces be trusted without anyone placing points? Both traces have to be clean, and the
+// camera has to be close to square or the front wheel has to line up exactly. A trace on the wrong edge of one tire
+// (rim, sidewall, shadow) makes the tires look different sizes, which the camera solve can only explain as a large
+// camera angle, so a small camera angle is itself evidence that both traces are on the tire.
+function autoCheck() {
+  const why = [];
+  if (S.wheels.some(w => !w)) return { ok: false, why: ['a tire was not found'] };
+  S.wheels.forEach((w, k) => {
+    const nm = k === rearIdx() ? 'rear' : 'front';
+    if (w.rms > 0.8) why.push(`${nm} trace not clean (fit ${fmt(w.rms, 2)} px)`);
+    if (w.coverage < 0.5) why.push(`${nm} tire only ${Math.round(w.coverage * 100)}% traced`);
+  });
+  const g = gradePhoto(), st = g && g.items.find(i => i.label === 'Front wheel straight');
+  const straight = st && st.level === 'good', nearSquare = g && g.slant < 6 && st && st.level !== 'poor';
+  if (!straight && !nearSquare) why.push(`camera ${g ? fmt(g.slant, 1) : '?'}° off square and front wheel ${st ? st.value : 'unknown'}`);
+  return { ok: !why.length, why };
+}
+// five points evenly spaced round an outline, starting at the top
+function ellPts(e) {
+  const c = Math.cos(e.phi), s = Math.sin(e.phi);
+  return [0, 1, 2, 3, 4].map(i => { const t = (-90 + 72 * i) / DEG + (e.phi ? -e.phi : 0), x = e.a * Math.cos(t), y = e.b * Math.sin(t); return [e.cx + x * c - y * s, e.cy + x * s + y * c]; });
+}
+// the tracer's search outline from the five points: the ellipse through them, or a circle if they don't make one
+function ptsToEll(P) {
+  const e = Core.fitEllipse(P);
+  if (e && e.a / e.b < 1.6 && e.b / e.a < 1.6) return { cx: e.cx, cy: e.cy, a: e.a, b: e.b, phi: e.phi };
+  const k = Core.kasa(P);
+  return { cx: k.cx, cy: k.cy, a: k.r, b: k.r, phi: 0 };
+}
+// green: the traced edge runs within 2 px of the point; yellow: within 5 px; red: further, or no edge traced
+function tirePtColor(k, i) {
+  const w = S.wheels[k];
+  if (!w) return '#F04438';
+  const d = Math.abs(Core.ellDist(w.ell, S.tirePts[k][i][0], S.tirePts[k][i][1]));
+  return d <= 2 && w.rms <= 0.6 ? '#3FB950' : d <= 5 && w.rms <= 1 ? '#F2C230' : '#F04438';
+}
+function flashTirePt(k, i) {
+  S.flash = { k, i, t0: performance.now() };
+  const tick = () => { draw(); if (S.flash && performance.now() - S.flash.t0 < 560) requestAnimationFrame(tick); else { S.flash = null; draw(); } };
+  requestAnimationFrame(tick);
+}
+const placeTirePt = (k, i) => { S.tirePlaced[k][i] = true; $('wizMsg').textContent = ''; retraceWheel(k); flashTirePt(k, i); };
+// closed Catmull-Rom spline through the points, for drawing only
+function splinePath(P, map) {
+  const n = P.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const p0 = P[(i + n - 1) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
+    for (let t = 0; t < 1; t += 1 / 16) {
+      const t2 = t * t, t3 = t2 * t, f = (a, b, cc, d) => 0.5 * (2 * b + (-a + cc) * t + (2 * a - 5 * b + 4 * cc - d) * t2 + (-a + 3 * b - 3 * cc + d) * t3);
+      out.push(map([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]));
+    }
+  }
+  return out;
+}
+function retraceWheel(k) {
+  const { gray, W, H } = S.img;
+  S.wheelInit[k] = ptsToEll(S.tirePts[k]);
+  S.wheels[k] = Core.fitWheelHand(gray, W, H, S.wheelInit[k]);
+  S.wheelsHand = true;
+  // everything found from the old wheels is found again: BB, seat tube, and any point not placed by hand
+  for (const g of ['st', 'sd', 'sr', 'sn', 'bar']) if (S.geo[g] && S.geo[g].src !== 'set') delete S.geo[g];
+  if (S.steer && !S.steer.set) S.steer = null;
+  if (S.bbMode === 'auto' || (S.bbCircle && !S.bbCircle.placed)) { S.bbMode = 'auto'; S.bbCircle = null; delete S.geo.bb; }
+  S.crankKey = '';
+  S.blocked = S.wheels.some(w => !w);
+  afterChange();
+}
+// how cleanly a tire edge was traced: rms of the fit in px and the share of the edge found
+const wheelQuality = w => !w ? 'none' : (w.rms <= 0.6 && w.coverage >= 0.45 ? 'clean' : w.rms <= 1 && w.coverage >= 0.3 ? 'check' : 'none');
+
+// ---------- pipeline ----------
+function recompute() {
+  S.tireMode = S.tireAct > 0 ? 'actual' : 'est'; S.wbMode = S.wb > 0 ? 'actual' : 'est'; S.shMode = S.sh > 0 ? 'actual' : 'est';
+  const [w0, w1] = S.wheels;
+  S.rect = S.rectRaw = S.scale = S.vals = S.crank = S.sta = null; S.auto = {};
+  if (!S.img || !w0 || !w1) return;
+  const o = { W: S.img.W, H: S.img.H, D1: 686, D2: 686 }; // equal tires: only their ratio matters to the camera solve
+  const key = [w0.ell.cx, w0.ell.a, w1.ell.cx, w1.ell.a, w0.pts.length, w1.pts.length, S.focalMode, S.f35].join('|');
+  if (key !== S.tiltKey) {
+    S.tilt = Core.solveTilt(w0.pts, w1.pts, { ...o, f35: S.focalMode === 'fixed' && S.f35 ? S.f35 : null, f35Prior: S.f35 || null });
+    S.tiltKey = key;
+  }
+  const tilt = S.flatten ? S.tilt : null;
+  S.rect = Core.buildRect(w0.pts, w1.pts, tilt, o);
+  S.rectRaw = Core.buildRect(w0.pts, w1.pts, null, o);
+  S.refs = S.wbMode === 'actual' && S.wb > 0 ? [{ id: 'wb', on: true, axle: true, name: 'Measured wheelbase', L: S.wb, tol: TOL.wb, depth: 0 }] : [];
+  ensureFg();
+  estimateTire();
+  let sc = computeScale(S.rect, []);
+  // the detectors need a rough scale even before one is entered: a 700c tire is about 680 mm
+  S.sWork = sc.sx || 680 / sc.tirePx;
+  detectSide();
+  S.side = S.sideSet || S.sideAuto || 'drive'; S.bbDepth = depthFor();
+  locateBB(); locateSeat();
+  if (S.shMode === 'actual' && S.sh > 0 && S.geo.bb && S.auto.sd) {
+    for (let it = 0; it < 2; it++) {
+      sc = computeScale(S.rect, [saddleRef(true)]);
+      if (!sc.sx) break;
+      S.sWork = sc.sx; locateSeat();
+    }
+  }
+  if (S.sta && (!S.geo.sr || !S.geo.sn || !S.geo.bar)) { guessPoints(); locateSeat(); }
+  initSteer();
+  guessFrame();
+  // axes saved by an earlier version turn round a point near the ground: move that point up the same line to
+  // mid head tube (400 mm above the axle), so the turning arc sits low on the line where it can be reached
+  if (S.steer && S.rect) {
+    const toR = q => Core.apply(S.rect.H, q[0], q[1]), G = toR(S.steer.g), T = toR(S.steer.t), FA = bikeFrame(S.rect).FA, s = S.sWork;
+    if (G[1] > FA.cy) {
+      const L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1, ux = (T[0] - G[0]) / L, uy = (T[1] - G[1]) / L, t = (FA.cy - 400 / s - G[1]) / uy;
+      const g = [G[0] + ux * t, G[1] + uy * t];
+      S.steer = { ...S.steer, g: Core.apply(S.rect.Hinv, g[0], g[1]), t: Core.apply(S.rect.Hinv, g[0] + ux * 150 / s, g[1] + uy * 150 / s) };
+    }
+  }
+  S.scale = sc;
+  if (!sc.sx) return;
+  S.geoPts = geoPoints(S.rect, tilt, sc.sx, sc.sy, 0); S.vals = geoValues(S.geoPts);
+}
+function saddleRef(on) {
+  const b = S.sta.bbR, q = Core.apply(S.rect.H, S.auto.sd[0], S.auto.sd[1]), px = Math.hypot(q[0] - b[0], q[1] - b[1]);
+  return { id: 'sh', name: 'Your saddle height', px, theta: Math.atan2(q[1] - b[1], q[0] - b[0]), L: S.sh, tol: TOL.sh, sigPx: 2.5, group: 'sh', on };
+}
+const rearIdx = () => frontRight() ? 0 : 1;
+function evalRefs(rect) {
+  const out = [];
+  rect.wheels.forEach((wh, k) => {
+    const ex = Core.ellExtents(wh.ell), sig = Math.max(0.4, 1.5 * S.wheels[k].rms), nm = (k === rearIdx() ? 'Rear' : 'Front') + ' tire Ø, ';
+    const useTire = S.tireAct > 0 || !(S.wb > 0 || S.sh > 0); // the rim guess is a last resort, never mixed with known values
+    out.push({ id: 'w' + k + 'h', name: nm + 'across', px: ex.w, theta: 0, L: tireD(), tol: tireTol(), sigPx: sig, group: 'tire', on: useTire, auto: true });
+    out.push({ id: 'w' + k + 'v', name: nm + 'upright', px: ex.h, theta: Math.PI / 2, L: tireD(), tol: tireTol(), sigPx: sig, group: 'tire', on: useTire, auto: true });
+  });
+  for (const r of S.refs) {
+    const a = rect.wheels[0].circ, b = rect.wheels[1].circ, d = Math.hypot(b.cx - a.cx, b.cy - a.cy);
+    out.push({ id: r.id, name: r.name, px: d, theta: Math.atan2(b.cy - a.cy, b.cx - a.cx), L: r.L, tol: r.tol, sigPx: 0.6, group: r.id, on: r.L > 0 });
+  }
+  return out;
+}
+function computeScale(rect, extra) {
+  const refs = evalRefs(rect).concat(extra || []), used = refs.filter(r => r.on);
+  const a = rect.wheels[0].circ, b = rect.wheels[1].circ, wbPx = Math.hypot(b.cx - a.cx, b.cy - a.cy);
+  const tirePx = refs.filter(r => r.auto).reduce((s, r) => s + r.px, 0) / 4;
+  const out = { refs, used: used.length, iso: null, ani: null, sx: null, sy: null, Z: Infinity, wbPx, tirePx, shPx: (extra && extra[0]) ? extra[0].px : null };
+  // how round the tires are after correction, independent of which references are used
+  const tires = refs.filter(r => r.auto), hs = tires.filter(r => r.theta === 0), vs = tires.filter(r => r.theta !== 0);
+  out.axisDiff = (hs[0].px + hs[1].px) / (vs[0].px + vs[1].px) - 1;
+  if (!used.length) return out;
+  out.iso = Core.fitScale(used, false); out.ani = Core.fitScale(used, true);
+  out.sx = out.sy = out.iso.s;
+  if (S.tilt && S.tilt.u > 1e-9) out.Z = out.iso.s / S.tilt.u;
+  return out;
+}
+// camera tilt direction in the corrected photo, or null when the camera was close to square
+function tiltDir() {
+  if (!S.tilt || !S.flatten) return null;
+  const a = -S.rect.levelDeg / DEG, tx = Math.cos(a) * S.tilt.a - Math.sin(a) * S.tilt.b, ty = Math.sin(a) * S.tilt.a + Math.cos(a) * S.tilt.b;
+  return Math.atan(Math.hypot(tx, ty)) * DEG < 1.5 ? null : Math.atan2(ty, tx);
+}
+// Tire OD from the photo: the rim lip of a 700c rim is about 632 mm across; the tire is that times its ratio to the lip
+const RIM_LIP_700C = 632;
+function estimateTire() {
+  if (S.rimKey === S.fgKey) return;
+  S.rimKey = S.fgKey;
+  const { W, H } = S.img, td = tiltDir();
+  const r = S.rect.wheels.map(w => Core.detectRimLip(S.fg, W, H, w.circ, td));
+  S.rim = r;
+  if (r[0] && r[1] && Math.abs(r[0].ratio - r[1].ratio) < 0.006) S.tireEst = { D: RIM_LIP_700C / ((r[0].ratio + r[1].ratio) / 2), src: 'rim' };
+  else S.tireEst = { D: 686, src: 'default' };
+}
+// Which way the bike faces: a drive-side photo faces right. Try both ways: the seat tube and the chainring are only found from the right rear wheel.
+// Run once per photo. It may run again while the tire outlines are being placed (they decide which wheel is which),
+// but never because the scale changed: on a hard photo a re-run can flip the answer and turn the whole bike round.
+function detectSide() {
+  const inTireStep = S.wiz != null && WIZ[S.wiz] && WIZ[S.wiz].k === 'wheels';
+  if (S.sideAuto && !inTireStep) return;
+  const key = S.fgKey;
+  if (S.sideKey === key) return;
+  S.sideKey = key;
+  const { W, H } = S.img, s = S.sWork, sc = {};
+  for (const fr of [true, false]) {
+    const RA = S.rect.wheels[fr ? 0 : 1].circ, dir = fr ? 1 : -1;
+    const st = Core.detectSeatTube(S.fg, W, H, { bbx: RA.cx + dir * 410 / s, bby: RA.cy + 70 / s, dir, s, t0: 380, t1: 650, guess: 73.5 });
+    const ck = Core.detectCrank(S.fg, W, H, { rax: RA.cx, ray: RA.cy, dir, s });
+    // a ring counts by how much of it was found and how cleanly it fits: a solid chainring can be half hidden by the
+    // chain and crank but fit very cleanly, while a ring found in the wrong place fits badly
+    const ringD = ck ? 2 * ck.r * s : 0;
+    const ring = ck && ringD >= 120 && ringD <= 260 ? Math.min(1, ck.coverage) * (ck.rms <= 1 ? 1 : ck.rms <= 2 ? 0.5 : 0.15) : 0;
+    sc[fr] = (st.ok ? 2 : 0) + st.n / st.nSt + 1.5 * ring;
+  }
+  S.sideAuto = sc[true] >= sc[false] ? 'drive' : 'nds';
+  S.sideConf = Math.abs(sc[true] - sc[false]) >= 0.8 ? 'high' : 'low';
+}
+function renderSideAsk() {
+  const el = $('sideAsk'); if (!el) return;
+  const show = !!(S.img && S.rect && S.sideAuto && S.sideConf === 'low' && !S.sideSet && !S.sideAsked && !S.blocked);
+  el.style.display = show ? 'block' : 'none';
+}
+function ensureFg() {
+  const key = S.rect.H.map(v => v.toPrecision(9)).join(',');
+  if (S.fg && S.fgKey === key) return;
+  S.fg = Core.warpGray(S.img.gray, S.img.W, S.img.H, S.rect.Hinv); S.fgKey = key;
+}
+// bike frame: origin at rear axle, x toward the front wheel, y up, mm
+function bikeFrame(rect) {
+  const ri = rearIdx();
+  return { RA: rect.wheels[ri].circ, FA: rect.wheels[1 - ri].circ, dir: frontRight() ? 1 : -1 };
+}
+function toBike(p, depth, rect, tilt, sx, sy, fr) {
+  const q = Core.apply(rect.H, p[0], p[1]);
+  let X = fr.dir * (q[0] - fr.RA.cx) * sx, Y = -(q[1] - fr.RA.cy) * sy;
+  if (depth && tilt) { // a point proud of the wheel plane appears shifted by depth * tan(tilt)
+    const a = -rect.levelDeg / DEG, c = Math.cos(a), s = Math.sin(a);
+    const tx = c * tilt.a - s * tilt.b, ty = s * tilt.a + c * tilt.b;
+    X -= fr.dir * depth * tx; Y += depth * ty;
+  }
+  return [X, Y];
+}
+const bikeToRect = (B, fr, sc) => [fr.RA.cx + B[0] / (fr.dir * sc.sx), fr.RA.cy - B[1] / sc.sy];
+// Drive side: the chainring. Non-drive side: the crank bolt or the hole at the spindle end. Both are circles around the BB.
+const bbTarget = () => S.side === 'drive' ? { name: 'chainring', rMinMm: 55, rMaxMm: 115, r0: 95 } : { name: 'crank bolt', rMinMm: 6, rMaxMm: 22, r0: 12, cs: [395, 450], dr: [50, 90] };
+function setBBFromCircle(cc) { S.geo.bb = { p: Core.apply(S.rect.Hinv, cc.cx, cc.cy), depth: S.bbDepth, auto: S.bbMode === 'auto' }; }
+function locateBB() {
+  const { W, H } = S.img, fr = bikeFrame(S.rect), s = S.sWork, tg = bbTarget();
+  S.crank = null;
+  if (S.bbMode === 'circle' && S.bbCircle) {
+    if (S.bbCircle.placed) { setBBFromCircle(S.bbCircle); S.crank = S.bbCircle; } else delete S.geo.bb;
+    return;
+  }
+  const key = S.fgKey + '|' + s.toFixed(2) + '|' + S.side;
+  if (S.crankKey !== key) {
+    S.crankDet = Core.detectCrank(S.fg, W, H, { rax: fr.RA.cx, ray: fr.RA.cy, dir: fr.dir, s, rMinMm: tg.rMinMm, rMaxMm: tg.rMaxMm, cs: tg.cs, dr: tg.dr });
+    S.crankKey = key;
+  }
+  const c = S.crankDet;
+  if (c && c.coverage >= 0.45 && c.rms <= 3.5) { S.crank = c; setBBFromCircle(c); return; }
+  // not found: offer a circle to drag onto it, starting where a BB usually sits
+  delete S.geo.bb;
+  S.bbMode = 'circle';
+  S.bbCircle = { cx: fr.RA.cx + fr.dir * 410 / s, cy: fr.RA.cy + 70 / s, r: tg.r0 / s, placed: false, snapped: false };
+}
+// a circle placed by hand stays exactly where it is put
+function snapBBCircle() { S.bbCircle = { ...S.bbCircle, placed: true, snapped: false }; afterChange(); }
+// colour of the corrected photo at a point
+function rgbAtRect(x, y) {
+  const { W, H, rgba } = S.img, p = Core.apply(S.rect.Hinv, x, y);
+  const px = Math.min(W - 1.001, Math.max(0, p[0])), py = Math.min(H - 1.001, Math.max(0, p[1]));
+  const x0 = px | 0, y0 = py | 0, fx = px - x0, fy = py - y0, i = (y0 * W + x0) * 4, j = i + W * 4, o = [0, 0, 0];
+  for (let c = 0; c < 3; c++) o[c] = (rgba[i + c] * (1 - fx) + rgba[i + 4 + c] * fx) * (1 - fy) + (rgba[j + c] * (1 - fx) + rgba[j + 4 + c] * fx) * fy;
+  return o;
+}
+// Outline of an object against its background: walk inward from tOut (background) toward tIn and
+// return where the colour first leaves the background colour for good. Works for light or dark saddles.
+function silhouetteEdge(x, y, dx, dy, tIn, tOut) {
+  const n = Math.round(Math.abs(tOut - tIn) / 0.5), sg = tOut > tIn ? -1 : 1, cols = [];
+  for (let i = 0; i <= n; i++) { const t = tOut + sg * i * 0.5; cols.push(rgbAtRect(x + dx * t, y + dy * t)); }
+  const nb = Math.max(6, Math.round(n * 0.2)), bg = [0, 1, 2].map(c => Core.median(cols.slice(0, nb).map(v => v[c])));
+  const d = cols.map(v => Math.hypot(v[0] - bg[0], v[1] - bg[1], v[2] - bg[2]));
+  const noise = 1.4826 * Core.median(d.slice(0, nb)), thr = Math.max(28, 5 * noise), hold = 5;
+  for (let i = nb; i <= n - hold; i++) {
+    let ok = true; for (let k = 0; k < hold; k++) if (d[i + k] < thr) { ok = false; break; }
+    if (!ok) continue;
+    const plateau = Core.median(d.slice(i, Math.min(n, i + 8))), lvl = Math.max(thr * 0.6, plateau / 2);
+    let j = i; while (j > 1 && d[j - 1] > lvl) j--;
+    const f = d[j] !== d[j - 1] ? (lvl - d[j - 1]) / (d[j] - d[j - 1]) : 0;
+    return tOut + sg * (j - 1 + Math.min(1, Math.max(0, f))) * 0.5;
+  }
+  return null;
+}
+// points placed from a first guess, by tab; each pulses on the photo until someone grabs it
+const TAB_KEYS = { fit: ['st', 'sd', 'sn', 'sr', 'bar'], geo: ['steer', 'st', 'ht', 'hb', 'stt'] };
+// yellow: needs you to place it. green: you placed it.
+const MARK = { todo: '#F2C230', done: '#3FB950' };
+const markCol = k => untouched(k) ? MARK.todo : MARK.done;
+// a point another adjustment just moved goes back to yellow, so it gets checked again
+const unplace = (...ks) => ks.forEach(k => { delete S.touched[k]; });
+const untouched = k => !S.touched[k] && (k === 'steer' ? !!S.steer : !!S.geo[k]);
+// the points each number depends on: a number is tagged GUESS while any of them is untouched
+const DEPS = { saddleHeight: ['st', 'sd'], saddleToBarReach: ['sn', 'sr', 'bar'], drop: ['sn', 'sr', 'bar'], rise: ['sn', 'sr', 'bar'], saddleToBarDrop: ['sn', 'sr', 'bar'], saddleSetback: ['sn'], sweetSpotSetback: ['sn', 'sr'], effSeatAngleSaddle: ['sn', 'sr'], noseToBarDirect: ['sn', 'bar'], barH: ['bar'], barTheta: ['bar'], seatAngleActual: ['st'], stOffsetA: ['st'], forkLength: ['steer', 'hb'],
+  Sx: ['sn', 'sr'], Sy: ['sn', 'sr'], Hx: ['bar'], Hy: ['bar'], saddleLen: ['sn', 'sr'], saddleTilt: ['sn', 'sr'],
+  stack: ['steer', 'ht'], reach: ['steer', 'ht'], headTube: ['ht', 'hb'], seatTube: ['st', 'stt'], ett: ['steer', 'ht', 'st'], seatAngle: ['st', 'ht'], headAngle: ['steer'], forkOffset: ['steer'], trail: ['steer'] };
+const isGuess = k => (DEPS[k] || []).some(untouched);
+const tabFit = () => S.wiz == null && S.tab === 'fit', tabGeo = () => S.wiz == null && S.tab === 'geo';
+// placing the saddle top from the Scale section (Setup tab, or the scale step of setup)
+const shPlaced = () => !!S.touched.sd && !S.shPlace; // Top has been moved and the placing is finished
+const shPlacing = () => !!S.shPlace && ((S.wiz == null && S.tab === 'setup') || (S.wiz != null && WIZ[S.wiz] && WIZ[S.wiz].k === 'scale'));
+// The seat tube angle is the line from the BB through the seat tube point (ST). ST is placed from the traced
+// seat tube, or at the default 73.5°, until it is moved by hand. The saddle top slides along that line.
+function locateSeat() {
+  const bb = S.geo.bb; if (!bb) return;
+  bb.depth = S.bbDepth;
+  const { W, H } = S.img, fr = bikeFrame(S.rect), s = S.sWork, sc = { sx: s, sy: s }, tilt = S.flatten ? S.tilt : null;
+  const bbR = bikeToRect(toBike(bb.p, bb.depth, S.rect, tilt, sc.sx, sc.sy, fr), fr, sc);
+  const R = k => S.geo[k] ? Core.apply(S.rect.H, S.geo[k].p[0], S.geo[k].p[1]) : null, sn = R('sn'), sr = R('sr');
+  const toI = q => Core.apply(S.rect.Hinv, q[0], q[1]);
+  let det = null;
+  if (!S.geo.st || S.geo.st.src !== 'set') {
+    let t1 = 700;
+    if (sn && sr) t1 = Math.min(950, Math.max(480, Math.hypot((sn[0] + sr[0]) / 2 - bbR[0], (sn[1] + sr[1]) / 2 - bbR[1]) * s - 70));
+    det = Core.detectSeatTube(S.fg, W, H, { bbx: bbR[0], bby: bbR[1], dir: fr.dir, s, t0: Math.min(380, t1 - 200), t1, guess: 73.5 });
+    det.frac = det.n / det.nSt;
+    det.conf = !det.ok ? 'none' : (det.rms < 1 && det.frac >= 0.45 ? 'high' : 'low');
+    const a0 = det.conf === 'high' ? det.anchored : 73.5, th = a0 / DEG;
+    S.geo.st = { p: toI([bbR[0] - fr.dir * Math.cos(th) * 640 / s, bbR[1] - Math.sin(th) * 640 / s]), depth: 0, src: det.conf === 'high' ? 'auto' : 'default' };
+  }
+  const stR = R('st'), L = Math.hypot(stR[0] - bbR[0], stR[1] - bbR[1]) || 1, u = [(stR[0] - bbR[0]) / L, (stR[1] - bbR[1]) / L];
+  const angle = Math.atan2(-u[1], -fr.dir * u[0]) * DEG;
+  // offset seat tube (Setup toggle, as the engine's seatTubeBend.offset): the seat axis runs parallel, A mm ahead of the BB, square from it
+  let nf = [-u[1], u[0]]; if (nf[0] * fr.dir < 0) nf = [-nf[0], -nf[1]];
+  const A = S.stOff ? (S.stA || 0) : 0, o = [bbR[0] + nf[0] * A / s, bbR[1] + nf[1] * A / s];
+  S.sta = { det, angle, auto: S.geo.st.src === 'auto', src: S.geo.st.src, bbR, o, nf, u, end: [o[0] + u[0] * 820 / s, o[1] + u[1] * 820 / s] };
+  // saddle top: first guess is where the line leaves the saddle's outline against the background
+  if (!S.geo.sd) {
+    const e = silhouetteEdge(bbR[0], bbR[1], u[0], u[1], 560 / s, 1000 / s), t = e != null ? e : 740 / s;
+    S.geo.sd = { p: toI([bbR[0] + u[0] * t, bbR[1] + u[1] * t]), depth: 0, src: 'guess' };
+  }
+  // saddle top: where the seat axis (the post line, offset or not) meets the top of the saddle
+  const q = R('sd'), t = Math.max(0, (q[0] - o[0]) * u[0] + (q[1] - o[1]) * u[1]), sdR = [o[0] + u[0] * t, o[1] + u[1] * t];
+  S.auto.sd = toI(sdR); S.auto.sdSnap = true; S.sta.end = [o[0] + u[0] * (t + 40 / s), o[1] + u[1] * (t + 40 / s)]; S.sta.sdR = sdR;
+  if (sn && sr) {
+    const mx = (sn[0] + sr[0]) / 2, my = (sn[1] + sr[1]) / 2;
+    const e2 = silhouetteEdge(mx, my, 0, -1, -30 / s, 45 / s);
+    S.auto.mid = Core.apply(S.rect.Hinv, mx, e2 != null ? my - e2 : my); S.auto.midSnap = e2 != null;
+  }
+}
+// First placement of the steering axis: 72° and a 45 mm fork offset, so the person only has to nudge it.
+// Stored as two photo points: G low on the axis (the slider), T high on it (the arc).
+function initSteer() {
+  if (S.steer || !S.rect || !S.sWork) return;
+  const fr = bikeFrame(S.rect), s = S.sWork, R = (fr.FA.r || 340 / s) * s;
+  if (S.geo.ht && S.geo.hb) { // from head tube top and bottom clicks (the examples have them)
+    const a = Core.apply(S.rect.H, S.geo.ht.p[0], S.geo.ht.p[1]), b = Core.apply(S.rect.H, S.geo.hb.p[0], S.geo.hb.p[1]);
+    const L = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, ux = (a[0] - b[0]) / L, uy = (a[1] - b[1]) / L; // up the head tube
+    const g = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], t = [g[0] + ux * 150 / s, g[1] + uy * 150 / s];
+    S.steer = { g: Core.apply(S.rect.Hinv, g[0], g[1]), t: Core.apply(S.rect.Hinv, t[0], t[1]), set: true };
+    return;
+  }
+  const HA = 72 / DEG;
+  const trail = (R * Math.cos(HA) - 45) / Math.sin(HA);
+  const up = R + 400; // about the middle of the head tube: 400 mm above the axle
+  const g = [fr.FA.cx + fr.dir * (trail - up / Math.tan(HA)) / s, fr.FA.cy - 400 / s];
+  const t = [g[0] - fr.dir * Math.cos(HA) * 150 / s, g[1] - Math.sin(HA) * 150 / s];
+  S.steer = { g: Core.apply(S.rect.Hinv, g[0], g[1]), t: Core.apply(S.rect.Hinv, t[0], t[1]) };
+}
+// First guesses for the frame points. Head tube bottom: a road fork crown, about 385 mm up the steering axis from the
+// axle; top: 150 mm above that. Seat tube top: 72% of the saddle height up the seat tube line.
+function guessFrame() {
+  if (!S.rect || !S.sWork || !S.steer) return;
+  const s = S.sWork, toR = q => Core.apply(S.rect.H, q[0], q[1]), toI = q => Core.apply(S.rect.Hinv, q[0], q[1]);
+  const G = toR(S.steer.g), T = toR(S.steer.t), L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1, ux = (T[0] - G[0]) / L, uy = (T[1] - G[1]) / L, FA = bikeFrame(S.rect).FA;
+  const foot = (FA.cx - G[0]) * ux + (FA.cy - G[1]) * uy, at = mm => toI([G[0] + ux * (foot + mm / s), G[1] + uy * (foot + mm / s)]);
+  if (!S.geo.hb) S.geo.hb = { p: at(385), depth: 0, src: 'guess' };
+  if (!S.geo.ht) S.geo.ht = { p: at(535), depth: 0, src: 'guess' };
+  if (!S.geo.stt && S.sta && S.sta.sdR) {
+    const b = S.sta.o, u = S.sta.u, sh = Math.hypot(S.sta.sdR[0] - b[0], S.sta.sdR[1] - b[1]);
+    S.geo.stt = { p: toI([b[0] + u[0] * 0.72 * sh, b[1] + u[1] * 0.72 * sh]), depth: 0, src: 'guess' };
+  }
+}
+// the seat tube top can only sit on the seat tube line
+function onSeat(p) {
+  if (!S.sta || !S.rect) return p;
+  const b = S.sta.o, u = S.sta.u, q = Core.apply(S.rect.H, p[0], p[1]), t = (q[0] - b[0]) * u[0] + (q[1] - b[1]) * u[1];
+  return Core.apply(S.rect.Hinv, b[0] + u[0] * t, b[1] + u[1] * t);
+}
+// First guesses for the saddle ends and the stem clamp. They only count once confirmed.
+function guessPoints() {
+  if (!S.sta || !S.sta.sdR) return;
+  const s = S.sWork, dir = bikeFrame(S.rect).dir, top = S.sta.sdR, bbR = S.sta.bbR, toI = q => Core.apply(S.rect.Hinv, q[0], q[1]);
+  const y0 = top[1] + 6 / s; // just under the top of the saddle shell
+  const end = (sg, min, dflt) => { const e = silhouetteEdge(top[0], y0, sg * dir, 0, 0, 230 / s); return e != null && e * s > min ? e : dflt / s; };
+  if (!S.geo.sr) S.geo.sr = { p: toI([top[0] - dir * end(-1, 40, 120), y0]), depth: 0, src: 'guess' };
+  if (!S.geo.sn) S.geo.sn = { p: toI([top[0] + dir * end(1, 60, 140), y0]), depth: 0, src: 'guess' };
+  if (!S.geo.bar) { // typical bar position for the saddle height: about 0.62 of it ahead of the BB and 0.86 above
+    const SH = Math.hypot(top[0] - bbR[0], top[1] - bbR[1]);
+    S.geo.bar = { p: toI([bbR[0] + dir * 0.62 * SH, bbR[1] - 0.86 * SH]), depth: 0, src: 'guess' };
+  }
+}
+function geoValues(P) {
+  const o = {}, FA = P.FA, h = Math.hypot, R = P.Rw;
+  o.wheelbase = h(FA[0], FA[1]);
+  const { bb, ht, hb, sd, sn, sr, bar } = P;
+  if (bb) {
+    o.chainstay = h(bb[0], bb[1]); o.rearCentre = Math.abs(bb[0]); o.frontCentre = h(FA[0] - bb[0], FA[1] - bb[1]);
+    o.bbDrop = -(bb[1] - FA[1] * bb[0] / FA[0]); o.bbHeight = R - o.bbDrop;
+  }
+  if (bb && ht) { o.stack = ht[1] - bb[1]; o.reach = ht[0] - bb[0]; }
+  if (ht && hb) o.headTube = h(ht[0] - hb[0], ht[1] - hb[1]);
+  // seat tube length: BB centre to the top of the seat tube, straight
+  if (bb && P.stt) o.seatTube = h(P.stt[0] - bb[0], P.stt[1] - bb[1]);
+  // seat angles (engine): actual = the seat axis; effective = BB to where the seat axis crosses stack height (what geo charts print).
+  // On a straight tube the two are the same. Effective top tube runs level from that crossing to the HT top.
+  if (bb && P.seatO && P.seatU) {
+    const O = P.seatO, U = P.seatU, dx = U[0] - O[0], dy = U[1] - O[1];
+    o.seatAngleActual = Math.atan2(dy, -dx) * DEG;
+    o.stOffsetA = -((bb[0] - O[0]) * dy - (bb[1] - O[1]) * dx) / Math.hypot(dx, dy); // square from the BB to the axis, forward + (engine seatTubeBend.offset)
+    if (ht) { const xs = O[0] + dx * (ht[1] - O[1]) / dy; o.seatAngle = Math.atan2(ht[1] - bb[1], bb[0] - xs) * DEG; o.ett = ht[0] - xs; P.effSeat = [xs, ht[1]]; }
+    else o.seatAngle = o.seatAngleActual;
+  }
+  // steering axis: two points on it, G low (by the slider) and T high (by the arc). Bike frame: x forward, y up.
+  if (P.steerG && P.steerT) {
+    const G = P.steerG, T = P.steerT, HA = Math.atan2(T[1] - G[1], G[0] - T[0]);
+    o.headAngle = HA * DEG;
+    const yGround = FA[1] - R, xg = G[0] + (G[1] - yGround) / Math.tan(HA); // where the axis meets the ground
+    const trailMeas = xg - FA[0];
+    o.forkOffset = R * Math.cos(HA) - trailMeas * Math.sin(HA);
+    o.trail = S.forkOffset > 0 ? (R * Math.cos(HA) - S.forkOffset) / Math.sin(HA) : trailMeas;
+  }
+  // fork: drop the front axle square onto the steering axis. Axle to that foot is the offset (perpendicular);
+  // foot to the head tube bottom, along the axis, is the axle-to-crown (includes the lower headset stack)
+  if (P.steerG && P.steerT) {
+    const G = P.steerG, T = P.steerT, L = h(T[0] - G[0], T[1] - G[1]) || 1, u = [(T[0] - G[0]) / L, (T[1] - G[1]) / L];
+    const t = (FA[0] - G[0]) * u[0] + (FA[1] - G[1]) * u[1], foot = [G[0] + u[0] * t, G[1] + u[1] * t];
+    P.forkFoot = foot; o.forkOffsetPerp = h(FA[0] - foot[0], FA[1] - foot[1]);
+    if (hb) { o.forkA2C = (hb[0] - foot[0]) * u[0] + (hb[1] - foot[1]) * u[1]; o.forkLength = o.forkA2C - (S.lowerHS ?? 1); } // engine forkLength: crown race to axle, below the lower headset
+  }
+  if (o.seatAngle == null && S.sta) o.seatAngle = S.sta.angle;
+  // fit
+  const mid = P.mid || (sn && sr ? [(sn[0] + sr[0]) / 2, (sn[1] + sr[1]) / 2] : null);
+  const ref = mid;
+  // saddle height: BB straight to where the seat axis meets the saddle top (Daniel 2026-11-25; on a straight tube that is along the tube)
+  if (bb && sd) o.saddleHeight = h(sd[0] - bb[0], sd[1] - bb[1]);
+  if (bb && sn) o.saddleSetback = bb[0] - sn[0];                  // engine saddleSetback: BB -> nose tip, horizontal
+  if (bb && mid) { o.sweetSpotSetback = bb[0] - mid[0]; o.effSeatAngleSaddle = Math.atan2(mid[1] - bb[1], bb[0] - mid[0]) * DEG; }
+  if (sn && sr) { o.saddleLen = h(sn[0] - sr[0], sn[1] - sr[1]); o.saddleTilt = Math.atan2(sn[1] - sr[1], sn[0] - sr[0]) * DEG; } // nose up is positive, level with the ground
+  if (bb && ref) { o.Sx = bb[0] - ref[0]; o.Sy = ref[1] - bb[1]; }
+  if (bb && bar) { o.Hx = bar[0] - bb[0]; o.Hy = bar[1] - bb[1]; o.barH = h(o.Hx, o.Hy); o.barTheta = Math.atan2(o.Hy, o.Hx) * DEG; }
+  if (ref && bar) {
+    o.saddleToBarReach = bar[0] - ref[0];                         // engine "Butt to bars": sweet spot to bar clamp center, level
+    o.drop = ref[1] - (bar[1] + S.barD / 2);                      // engine barDrop: sweet spot to the top of the bar clamp
+    o.rise = -o.drop;
+    o.saddleToBarDrop = ref[1] - bar[1];                          // engine saddleToBarDrop: to the bar clamp center
+  }
+  if (sn && bar) o.noseToBarDirect = h(bar[0] - sn[0], bar[1] + S.barD / 2 - sn[1]); // engine: nose tip to the top of the bar clamp, straight
+  return o;
+}
+function geoPoints(rect, tilt, sx, sy, jitter) {
+  const fr = bikeFrame(rect), P = {}, j = jitter || 0, n = k => j ? k * Core.randn() : 0;
+  P.Rw = (rect.wheels[0].circ.r + rect.wheels[1].circ.r) / 2 * sx;
+  if (j) fr.RA = { cx: fr.RA.cx + n(0.3), cy: fr.RA.cy + n(0.3) };
+  P.FA = [fr.dir * (fr.FA.cx + n(0.3) - fr.RA.cx) * sx, -(fr.FA.cy + n(0.3) - fr.RA.cy) * sy];
+  for (const g of GEO) {
+    const pt = S.geo[g.k]; if (!pt) continue;
+    const sg = g.k === 'bb' ? (j ? 2 : 0) : j; // the BB is never located to a single pixel
+    const pp = ON_AXIS[g.k] ? onSteer(pt.p) : g.k === 'stt' ? onSeat(pt.p) : pt.p;
+    P[g.k] = toBike([pp[0] + n(sg), pp[1] + n(sg)], pt.depth, rect, tilt, sx, sy, fr);
+  }
+  if (S.steer) { P.steerG = toBike([S.steer.g[0] + n(j), S.steer.g[1] + n(j)], 0, rect, tilt, sx, sy, fr); P.steerT = toBike([S.steer.t[0] + n(j), S.steer.t[1] + n(j)], 0, rect, tilt, sx, sy, fr); }
+  if (S.sta && S.sta.o) { const o = S.sta.o, u = S.sta.u, s0 = S.sWork || 1, I = q => Core.apply(rect.Hinv, q[0], q[1]);
+    P.seatO = toBike(I(o), 0, rect, tilt, sx, sy, fr); P.seatU = toBike(I([o[0] + u[0] * 500 / s0, o[1] + u[1] * 500 / s0]), 0, rect, tilt, sx, sy, fr); }
+  for (const k of ['sd', 'mid']) if (S.auto[k]) P[k] = toBike([S.auto[k][0] + n(j), S.auto[k][1] + n(j)], 0, rect, tilt, sx, sy, fr);
+  return P;
+}
+let mcTimer = null;
+function scheduleMC() { clearTimeout(mcTimer); mcTimer = setTimeout(() => { runMC(); renderFit(); renderGeo(); }, 120); }
+function runMC() {
+  S.mc = null;
+  if (!S.rect || !S.scale || !S.scale.sx) return;
+  const N = 200, o = { W: S.img.W, H: S.img.H, D1: 686, D2: 686 };
+  const sub = S.wheels.map(w => w.pts.filter((_, i) => i % 4 === 0));
+  const tilt = S.flatten ? S.tilt : null, diag = Math.hypot(o.W, o.H);
+  const base = Core.buildRect(sub[0], sub[1], tilt, o), r0 = base.wheels[0].circ.r + base.wheels[1].circ.r;
+  const L = tilt && tilt.cov ? Core.cholesky(tilt.cov) : null, sc = S.scale;
+  const sum = {}, sq = {}, cnt = {};
+  for (let i = 0; i < N; i++) {
+    let t = tilt, rect = S.rect, q = 1;
+    if (tilt && L) {
+      const z = L.map(() => Core.randn()), d = L.map(row => row.reduce((s, v, k) => s + v * z[k], 0));
+      const v = tilt.np === 3 ? Math.max(0, tilt.v + d[2]) : tilt.v;
+      t = { a: tilt.a + d[0], b: tilt.b + d[1], v, u: v / diag };
+      rect = Core.buildRect(sub[0], sub[1], t, o);
+      q = r0 / (rect.wheels[0].circ.r + rect.wheels[1].circ.r);
+    }
+    const s = (sc.iso.s + sc.iso.sigS * Core.randn()) * q;
+    const v = geoValues(geoPoints(rect, t, s, s, S.clickSig));
+    for (const k in v) { sum[k] = (sum[k] || 0) + v[k]; sq[k] = (sq[k] || 0) + v[k] * v[k]; cnt[k] = (cnt[k] || 0) + 1; }
+  }
+  S.mc = {};
+  for (const k in sum) { const m = sum[k] / cnt[k]; S.mc[k] = Math.sqrt(Math.max(0, sq[k] / cnt[k] - m * m)); }
+}
+// ---------- photo grade (provisional thresholds) ----------
+function gradePhoto() {
+  if (!S.rect || !S.tilt) return null;
+  const items = [], t = S.tilt, rank = { good: 0, ok: 1, poor: 2 };
+  const add = (level, label, value, advice) => items.push({ level, label, value, advice: level === 'good' ? '' : advice });
+  const yaw = Math.atan(t.a) * DEG, pitch = Math.atan(t.b) * DEG, slant = Math.atan(Math.hypot(t.a, t.b)) * DEG;
+  const adv = Math.abs(yaw) > Math.abs(pitch) ? 'Stand square to the middle of the bike.' : (pitch > 0 ? 'Lower the camera toward saddle height, or step back and zoom in.' : 'Raise the camera toward saddle height, or step back and zoom in.');
+  add(slant < 8 ? 'good' : slant < 20 ? 'ok' : 'poor', 'Camera angle', `${fmt(slant, 1)}° off square`, adv);
+  const cov = Math.min(...S.wheels.map(w => Math.min(1, w.coverage))), rms = Math.max(...S.wheels.map(w => w.rms));
+  add(cov >= 0.5 && rms < 1 ? 'good' : cov >= 0.3 ? 'ok' : 'poor', 'Tire outlines', `${Math.round(cov * 100)}% traced`, 'Use a plain background that contrasts with the tires.');
+  // A turned front wheel makes the front tire, and only the front tire, look narrower than tall after correction.
+  // Squash that both tires share (edge finding at the ground, the solve itself) says nothing about steering.
+  const oor = S.rect.wheels.map(w => { const e = Core.ellExtents(w.ell); return e.h / e.w - 1; }), ri = rearIdx();
+  const diff = Math.abs(oor[1 - ri] - oor[ri]), steer = Math.sqrt(2 * diff) * DEG;
+  if (S.flatten) add(diff < 0.003 ? 'good' : diff < 0.008 ? 'ok' : 'poor', 'Front wheel straight', diff < 0.003 ? 'lined up' : `about ${fmt(steer, 0)}° turned`, 'Straighten the front wheel so both wheels line up.');
+  if (S.sWork) {
+    const mm = S.sWork;
+    add(mm < 1 ? 'good' : mm < 2 ? 'ok' : 'poor', 'Resolution', `${fmt(mm, 2)} mm per pixel`, 'Upload the original, full-size photo.');
+  }
+  const level = items.reduce((m, i) => rank[i.level] > rank[m] ? i.level : m, 'good');
+  return { level, items, yaw, pitch, slant };
+}
+
+// ---------- view ----------
+function ensureFlat() {
+  if (!S.rect) return null;
+  const key = S.rect.H.map(v => v.toPrecision(9)).join(',');
+  if (S.flat && S.flatKey === key) return S.flat;
+  const { W, H, rgba } = S.img, Hi = S.rect.Hinv;
+  const c = S.flat || document.createElement('canvas'); c.width = W; c.height = H;
+  const cx = c.getContext('2d'), out = cx.createImageData(W, H), od = out.data;
+  for (let y = 0, o = 0; y < H; y++) {
+    let nx = Hi[1] * y + Hi[2], ny = Hi[4] * y + Hi[5], nw = Hi[7] * y + Hi[8];
+    for (let x = 0; x < W; x++, o += 4, nx += Hi[0], ny += Hi[3], nw += Hi[6]) {
+      const sx = nx / nw, sy = ny / nw;
+      if (sx < 0 || sy < 0 || sx > W - 1.001 || sy > H - 1.001) { od[o + 3] = 255; od[o] = od[o + 1] = od[o + 2] = 24; continue; }
+      const x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0, i = (y0 * W + x0) * 4, j = i + W * 4;
+      const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+      od[o] = rgba[i] * w00 + rgba[i + 4] * w10 + rgba[j] * w01 + rgba[j + 4] * w11;
+      od[o + 1] = rgba[i + 1] * w00 + rgba[i + 5] * w10 + rgba[j + 1] * w01 + rgba[j + 5] * w11;
+      od[o + 2] = rgba[i + 2] * w00 + rgba[i + 6] * w10 + rgba[j + 2] * w01 + rgba[j + 6] * w11;
+      od[o + 3] = 255;
+    }
+  }
+  cx.putImageData(out, 0, 0);
+  S.flat = c; S.flatKey = key;
+  return c;
+}
+const flatView = () => S.view.mode === 'flat' && S.rect;
+const toView = p => flatView() ? Core.apply(S.rect.H, p[0], p[1]) : p;
+const fromView = p => flatView() ? Core.apply(S.rect.Hinv, p[0], p[1]) : p;
+const rect2view = p => flatView() ? p : Core.apply(S.rect.Hinv, p[0], p[1]);
+const v2s = p => [(p[0] - S.view.ox) * S.view.z, (p[1] - S.view.oy) * S.view.z];
+const i2s = p => v2s(toView(p));
+const r2s = p => v2s(rect2view(p));
+const s2i = (x, y) => fromView([x / S.view.z + S.view.ox, y / S.view.z + S.view.oy]);
+function bike2s(X, Y) { return r2s(bikeToRect([X, Y], bikeFrame(S.rect), S.scale)); }
+function fitView() {
+  if (!S.img) return;
+  const r = cv.getBoundingClientRect();
+  const z = Math.min(r.width / S.img.W, r.height / S.img.H) * 0.97;
+  S.view.z = z; S.view.ox = S.img.W / 2 - r.width / (2 * z); S.view.oy = S.img.H / 2 - r.height / (2 * z);
+  draw();
+}
+function zoomAt(f, sx, sy) {
+  const v = S.view, z1 = Math.min(40, Math.max(0.05, v.z * f));
+  v.ox += sx / v.z - sx / z1; v.oy += sy / v.z - sy / z1; v.z = z1; draw();
+}
+function sizeCanvas() {
+  const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, Math.round(r.width * d)); cv.height = Math.max(1, Math.round(r.height * d));
+  draw();
+}
+
+// ---------- drawing ----------
+function line(a, b, col, w = 1.5, dash) {
+  ctx.save(); ctx.setLineDash(dash || []); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+  ctx.strokeStyle = 'rgba(0,0,0,.55)'; ctx.lineWidth = w + 2; ctx.stroke();
+  ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); ctx.restore();
+}
+function tag(x, y, text, col, prio = 0) {
+  if (S.lens) return;
+  if (S.tagQ) { S.tagQ.push({ x, y, text, col, prio }); return; }
+  drawTag(x, y, text, col);
+}
+function placeTags() {
+  const Q = S.tagQ; S.tagQ = null; if (!Q) return;
+  ctx.save(); ctx.font = '500 12px "IBM Plex Mono", ui-monospace, monospace';
+  const boxes = (S.handles || []).map(h => [h.x - 9, h.y - 9, h.x + 9, h.y + 9]); // keep labels off the points you grab
+  const hit = (b) => boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]);
+  const order = Q.map((t, i) => [t, i]).sort((a, b) => a[0].prio - b[0].prio || a[1] - b[1]);
+  for (const [t] of order) {
+    const w = ctx.measureText(t.text).width + 10, h = 20;
+    const tries = [[0, 0]];
+    for (let r = 1; r <= 5; r++) tries.push([0, -22 * r], [0, 22 * r], [w * 0.55 * r, 0], [-w * 0.55 * r, 0]);
+    let pick = tries[0];
+    for (const [dx, dy] of tries) { const b = [t.x + dx - w / 2 - 2, t.y + dy - h / 2 - 2, t.x + dx + w / 2 + 2, t.y + dy + h / 2 + 2]; if (!hit(b)) { pick = [dx, dy]; break; } }
+    const x = t.x + pick[0], y = t.y + pick[1];
+    boxes.push([x - w / 2 - 2, y - h / 2 - 2, x + w / 2 + 2, y + h / 2 + 2]);
+    if (pick[0] || pick[1]) { ctx.restore(); line([t.x, t.y], [x, y], 'rgba(230,225,211,.35)', 0.8); ctx.save(); ctx.font = '500 12px "IBM Plex Mono", ui-monospace, monospace'; }
+    drawTag(x, y, t.text, t.col);
+  }
+  ctx.restore();
+}
+function drawTag(x, y, text, col) {
+  ctx.save(); ctx.font = '500 12px "IBM Plex Mono", ui-monospace, monospace';
+  const w = ctx.measureText(text).width + 10;
+  ctx.fillStyle = 'rgba(22,21,19,.92)'; ctx.fillRect(x - w / 2, y - 10, w, 20);
+  ctx.fillStyle = col; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 0.5); ctx.restore();
+}
+function lineTag(a, b, text, col) {
+  const steep = Math.abs(b[1] - a[1]) > Math.abs(b[0] - a[0]);
+  ctx.save(); ctx.font = '500 12px "IBM Plex Mono", ui-monospace, monospace'; const w = ctx.measureText(text).width / 2 + 14; ctx.restore();
+  if (steep) tag(Math.max(a[0], b[0]) + w, (a[1] + b[1]) / 2 + 14, text, col); else tag((a[0] + b[0]) / 2, Math.min(a[1], b[1]) - 17, text, col);
+}
+function dot(p, col, r = 5, label, lx = 0, ly = -19) {
+  ctx.save(); ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 6.2832);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill(); ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.stroke();
+  ctx.lineWidth = 1.6; ctx.strokeStyle = col; ctx.stroke();
+  ctx.beginPath(); ctx.arc(p[0], p[1], 1.2, 0, 6.2832); ctx.fillStyle = col; ctx.fill(); ctx.restore();
+  if (label) tag(p[0] + lx, p[1] + ly, label, col);
+}
+function ring(c, r, col, dash) { // circle given in corrected-image coordinates
+  ctx.save(); ctx.setLineDash(dash || []); ctx.beginPath();
+  for (let a = 0; a <= 360; a += 4) { const p = r2s([c[0] + r * Math.cos(a / DEG), c[1] + r * Math.sin(a / DEG)]); a ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }
+  ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 3.5; ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
+}
+// turning handle: a short thin arc round the pivot with small arrowheads, and a round grip
+function arcGlyph(pivotS, hS, col, label) {
+  const r = Math.hypot(hS[0] - pivotS[0], hS[1] - pivotS[1]); if (r < 10) return;
+  const a0 = Math.atan2(hS[1] - pivotS[1], hS[0] - pivotS[0]), d = 16 / r;
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const [w, cl] of [[3.5, 'rgba(0,0,0,.45)'], [1.5, col]]) {
+    ctx.strokeStyle = cl; ctx.lineWidth = w; ctx.beginPath(); ctx.arc(pivotS[0], pivotS[1], r, a0 - d, a0 + d); ctx.stroke();
+    for (const sg of [-1, 1]) {
+      const a = a0 + sg * d, e = [pivotS[0] + r * Math.cos(a), pivotS[1] + r * Math.sin(a)], tx = -Math.sin(a) * sg, ty = Math.cos(a) * sg, nx = Math.cos(a), ny = Math.sin(a);
+      ctx.beginPath(); ctx.moveTo(e[0] - 4.5 * tx + 3.5 * nx, e[1] - 4.5 * ty + 3.5 * ny); ctx.lineTo(e[0], e[1]); ctx.lineTo(e[0] - 4.5 * tx - 3.5 * nx, e[1] - 4.5 * ty - 3.5 * ny); ctx.stroke();
+    }
+  }
+  ctx.beginPath(); ctx.arc(hS[0], hS[1], 4.5, 0, 6.2832); ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(hS[0], hS[1], 3.5, 0, 6.2832); ctx.fillStyle = col; ctx.fill();
+  ctx.restore();
+  if (label) tag(hS[0] + 38, hS[1], label, col);
+}
+// the head tube points can only sit on the steering axis: this moves a photo point onto it
+const ON_AXIS = { ht: 1, hb: 1 };
+function onSteer(p) {
+  if (!S.steer || !S.rect) return p;
+  const toR = q => Core.apply(S.rect.H, q[0], q[1]), G = toR(S.steer.g), T = toR(S.steer.t), q = toR(p);
+  const L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1, ux = (T[0] - G[0]) / L, uy = (T[1] - G[1]) / L, t = (q[0] - G[0]) * ux + (q[1] - G[1]) * uy;
+  return Core.apply(S.rect.Hinv, G[0] + ux * t, G[1] + uy * t);
+}
+// HT top or bottom dragged: that point goes where it is put, the other stays, and the axis runs through both
+const RIDERS = { steer: ['ht', 'hb'], st: ['sd', 'stt'] };
+function riderPos(k) { // where a riding point is drawn, in corrected-image px
+  if (!S.rect || !S.geo[k]) return null;
+  const q = k === 'sd' ? S.auto.sd : ON_AXIS[k] ? onSteer(S.geo[k].p) : k === 'stt' ? onSeat(S.geo[k].p) : S.geo[k].p;
+  return q ? Core.apply(S.rect.H, q[0], q[1]) : null;
+}
+const axisAt = (key, x, y) => AXIS_GUIDES[key] ? { key, sx: x, sy: y, vx: x / S.view.z + S.view.ox, vy: y / S.view.z + S.view.oy } : null;
+// A placed point goes back to yellow when a later change (an axis turned, a point moved) shifts what it measures
+// by more than 0.5% from where you last set it: seat tube length for ST top, saddle height for the saddle top,
+// and for the head tube points their height above the BB, against 0.5% of the stack.
+function baseVal(k) {
+  const P = S.geoPts, v = S.vals, sx = S.scale && S.scale.sx; if (!P || !v || !sx) return null;
+  // in photo px, so changing the scale (wheelbase, tire, saddle height entry) never counts as a change
+  if (k === 'stt') return v.seatTube != null ? v.seatTube / sx : null; if (k === 'sd') return v.saddleHeight != null ? v.saddleHeight / sx : null;
+  if ((k === 'ht' || k === 'hb') && P[k] && P.bb) return [(P[k][0] - P.bb[0]) / sx, (P[k][1] - P.bb[1]) / sx]; // [ahead of BB, above BB]
+  return null;
+}
+function baseCheck(dragged) {
+  S.base = S.base || {};
+  const sx = (S.scale && S.scale.sx) || 1, stack = ((S.vals && S.vals.stack) || 600) / sx, reach = ((S.vals && S.vals.reach) || 390) / sx;
+  for (const k of ['stt', 'sd', 'ht', 'hb']) {
+    const now = baseVal(k); if (now == null || !S.touched[k]) continue;
+    if (k === dragged || S.base[k] == null) { S.base[k] = now; continue; } // you just set it: this is its new baseline
+    const b = S.base[k], moved = Array.isArray(now)
+      ? Math.abs(now[0] - b[0]) > 0.005 * reach || Math.abs(now[1] - b[1]) > 0.005 * stack // head tube: 0.5% of reach sideways, 0.5% of stack up/down
+      : Math.abs(now - b) > 0.005 * Math.abs(b); // seat tube length, saddle height: 0.5%
+    if (moved) { unplace(k); delete S.base[k]; }
+  }
+}
+function ridersStart(key) { const ks = RIDERS[key]; return ks ? ks.map(k => [k, riderPos(k)]) : null; }
+function ridersCheck(start) {
+  if (!start || !S.sWork) return;
+  const lim = 0.007 * ((S.vals && S.vals.seatTube) || 560); // 0.7% of the seat tube length, about 4 mm
+  for (const [k, a] of start) { const b = riderPos(k); if (a && b && Math.hypot(b[0] - a[0], b[1] - a[1]) * S.sWork > lim) unplace(k); }
+}
+// a small padlock: closed when locked, shackle swung open when not
+function padlock(c, closed) {
+  const x = c[0], y = c[1], col = closed ? '#E6E1D3' : '#A8A396';
+  ctx.save(); ctx.lineCap = 'round';
+  const shackle = () => { ctx.beginPath(); if (closed) ctx.arc(x, y - 2, 4, Math.PI, 0); else ctx.arc(x + 5, y - 3, 4, Math.PI, -0.2);
+    ctx.moveTo(x - 4, y - 2); ctx.lineTo(x - 4, y); if (closed) { ctx.moveTo(x + 4, y - 2); ctx.lineTo(x + 4, y); } ctx.stroke(); };
+  ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 3.6; shackle(); ctx.strokeRect(x - 6, y, 12, 8);
+  ctx.strokeStyle = col; ctx.lineWidth = 1.6; shackle();
+  ctx.fillStyle = col; ctx.fillRect(x - 6, y, 12, 8);
+  ctx.restore();
+}
+function steerFromHT(k, p) {
+  const other = k === 'ht' ? 'hb' : 'ht', pt = S.geo[k], op = S.geo[other];
+  if (S.lockA && S.lockX) { pt.p = onSteer(p); pt.src = 'set'; return; } // both locked: the point only slides along the axis
+  if ((S.lockA || S.lockX) && S.rect && S.steer) {
+    const toR = q => Core.apply(S.rect.H, q[0], q[1]), toI = q => Core.apply(S.rect.Hinv, q[0], q[1]);
+    const G = toR(S.steer.g), T = toR(S.steer.t), q = toR(p), oR = op ? toR(onSteer(op.p)) : null;
+    if (S.lockA) { // angle kept: slide the axis sideways until it runs through the point; the other point rides along
+      const L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1, ux = (T[0] - G[0]) / L, uy = (T[1] - G[1]) / L;
+      const xOn = G[0] + ux * (q[1] - G[1]) / uy, dx = q[0] - xOn;
+      S.steer.g = toI([G[0] + dx, G[1]]); S.steer.t = toI([T[0] + dx, T[1]]);
+      if (oR) op.p = toI([oR[0] + dx, oR[1]]);
+    } else { // position kept: turn the axis about the midpoint of the two points until it runs through the point
+      const pS = toR(onSteer(pt.p)), M = oR ? [(oR[0] + pS[0]) / 2, (oR[1] + pS[1]) / 2] : G;
+      const a0 = Math.atan2(pS[1] - M[1], pS[0] - M[0]), a1 = Math.atan2(q[1] - M[1], q[0] - M[0]);
+      if (Math.hypot(q[0] - M[0], q[1] - M[1]) * (S.sWork || 1) < 15) return;
+      const da = a1 - a0, cs = Math.cos(da), sn = Math.sin(da), rot = r => [M[0] + (r[0] - M[0]) * cs - (r[1] - M[1]) * sn, M[1] + (r[0] - M[0]) * sn + (r[1] - M[1]) * cs];
+      S.steer.g = toI(rot(G)); S.steer.t = toI(rot(T)); if (oR) op.p = toI(rot(oR));
+    }
+    S.steer.set = true; S.touched.steer = true;
+    pt.p = onSteer(p); pt.src = 'set'; return;
+  }
+  if (!S.rect || !S.sWork) { pt.p = p; pt.src = 'set'; return; }
+  const toR = q => Core.apply(S.rect.H, q[0], q[1]), toI = q => Core.apply(S.rect.Hinv, q[0], q[1]), s = S.sWork;
+  if (!op) { pt.p = onSteer(p); pt.src = 'set'; return; }
+  const o = toR(onSteer(op.p)), q = toR(p);
+  const top = k === 'ht' ? q : o, bot = k === 'ht' ? o : q;
+  const L = Math.hypot(top[0] - bot[0], top[1] - bot[1]);
+  if (L * s < 40 || top[1] >= bot[1]) return; // too short, or upside down: ignore
+  const ux = (top[0] - bot[0]) / L, uy = (top[1] - bot[1]) / L, g = [(top[0] + bot[0]) / 2, (top[1] + bot[1]) / 2];
+  S.steer = { g: toI(g), t: toI([g[0] + ux * 150 / s, g[1] + uy * 150 / s]), set: true };
+  pt.p = p; pt.src = 'set'; op.p = toI(o);
+  S.touched.steer = true;
+}
+// frame dimensions drawn on the photo: stack, reach, chainstay, BB drop, seat tube
+function dimLine(A, B, text, side, gap = 26) { // A, B in bike mm; label beside the middle
+  const a = bike2s(A[0], A[1]), b = bike2s(B[0], B[1]), L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const nx = -(b[1] - a[1]) / L, ny = (b[0] - a[0]) / L, col = '#E8B04A';
+  line(a, b, col, 1.4);
+  [a, b].forEach(q => line([q[0] - nx * 6, q[1] - ny * 6], [q[0] + nx * 6, q[1] + ny * 6], col, 1.4));
+  const k = (side || 1) * gap; tag((a[0] + b[0]) / 2 + nx * k, (a[1] + b[1]) / 2 + ny * k, text, col, 1);
+}
+function drawDims() {
+  const P = S.geoPts, v = S.vals, bb = P.bb, ht = P.ht, FA = P.FA, f = x => `${fmt(x, 0)}`;
+  if (!bb) return;
+  const dir = bikeFrame(S.rect).dir;
+  if (v.chainstay != null) dimLine([0, 0], bb, `CS ${f(v.chainstay)}`, -dir);
+  if (v.bbDrop != null) { const yAx = FA[1] * bb[0] / FA[0]; dimLine([bb[0], yAx], bb, `drop ${f(v.bbDrop)}`, -dir, 50); }
+  if (ht && v.stack != null) { dimLine(bb, [bb[0], ht[1]], `stack ${f(v.stack)}`, dir); dimLine([bb[0], ht[1]], ht, `reach ${f(v.reach)}`, dir); }
+  if (P.stt && v.seatTube != null) dimLine(bb, P.stt, `ST ${f(v.seatTube)}`, -dir, 34);
+  if (v.trail != null && P.Rw) { // axle straight down to the ground, then trail along the ground to where the steering axis lands
+    const yG = FA[1] - P.Rw, c0 = bike2s(FA[0], yG);
+    line(bike2s(FA[0], FA[1]), c0, '#E8B04A', 1.2, [4, 4]);
+    dimLine([FA[0], yG], [FA[0] + v.trail, yG], `trail ${f(v.trail)}`, -dir, 22);
+  }
+  if (P.forkFoot) {
+    dimLine(FA, P.forkFoot, `offset ${f(v.forkOffsetPerp)}`, -dir, 26);
+    if (P.hb && v.forkA2C != null) dimLine(P.forkFoot, P.hb, `fork ${f(v.forkLength)} + ${fmt(S.lowerHS ?? 1, 0)}`, -dir, 40);
+  }
+}
+function beacon(s, col) {
+  const ph = (performance.now() % 1200) / 1200;
+  ctx.save(); ctx.globalAlpha = 1 - ph; ctx.strokeStyle = col; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(s[0], s[1], 6 + 16 * ph, 0, 6.2832); ctx.stroke(); ctx.restore();
+}
+// a line that can be dragged: a, b in screen px; points have priority over lines
+function lineHandle(a, b, set, cursor, key) { S.lineHandles.push({ a, b, set, cursor, key }); }
+function nearLine(x, y) {
+  let best = null, bd = 8;
+  for (const h of S.lineHandles || []) {
+    const dx = h.b[0] - h.a[0], dy = h.b[1] - h.a[1], L2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((x - h.a[0]) * dx + (y - h.a[1]) * dy) / L2));
+    const d = Math.hypot(h.a[0] + dx * t - x, h.a[1] + dy * t - y);
+    if (d < bd) { bd = d; best = h; }
+  }
+  return best;
+}
+function handle(p, set, end, key) { S.handles.push({ x: p[0], y: p[1], set, end, key }); }
+// Points the tool calculates can't be dragged: they shake and say why.
+const LOCK_MSG = {
+  axle: 'Axle locations are calculated from the wheel and camera angle.',
+  sta: 'Set the seat tube angle first: drag the STA arc. The top of the saddle sits on that line.',
+  bb: 'The BB location is calculated from the chainring and the camera angle. Adjust it on the Setup page.',
+};
+function locked(p, id, kind) { S.locked.push({ x: p[0], y: p[1], id, kind }); }
+function shakeOff(id) {
+  const s = S.shake; if (!s || s.id !== id) return 0;
+  const t = performance.now() - s.t0; if (t > 450) return 0;
+  return Math.sin(t / 22) * 5 * (1 - t / 450);
+}
+function shakeLocked(h) {
+  S.shake = { id: h.id, t0: performance.now() };
+  const tick = () => { draw(); if (S.shake && performance.now() - S.shake.t0 < 470) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+  const tip = $('lockTip'); tip.textContent = LOCK_MSG[h.kind];
+  const r = $('stage').getBoundingClientRect(), cr = cv.getBoundingClientRect();
+  tip.style.display = 'block';
+  const x = Math.min(Math.max(8, h.x + cr.left - r.left - tip.offsetWidth / 2), r.width - tip.offsetWidth - 8);
+  tip.style.left = x + 'px'; tip.style.top = Math.max(8, h.y + cr.top - r.top - tip.offsetHeight - 18) + 'px';
+  clearTimeout(S.tipTimer); S.tipTimer = setTimeout(() => { tip.style.display = 'none'; }, 2600);
+}
+// keep redrawing while any tire point is still waiting to be placed, so the beacons pulse
+const needsPulse = () => (bbStep() && !S.touched.bb) || (wheelStep() && S.tirePlaced && S.tirePlaced.flat().some(v => !v)) || (S.wiz == null && S.rect && (TAB_KEYS[S.tab] || []).some(untouched)) || (shPlacing() && untouched('sd'));
+function pulse() {
+  if (needsPulse() && !S.drag) { draw(); requestAnimationFrame(pulse); }
+  else S.pulsing = false;
+}
+const wheelStep = () => S.wiz != null && WIZ[S.wiz] && WIZ[S.wiz].k === 'wheels';
+function draw() {
+  const tc = S.lens ? loupe : cv, d = S.lens ? S.lens.d : (window.devicePixelRatio || 1);
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  const cw = tc.width / d, ch = tc.height / d;
+  ctx.clearRect(0, 0, cw, ch);
+  S.handles = []; S.locked = []; S.lineHandles = []; S.tagQ = S.lens ? null : [];
+  if (!S.img) { S.tagQ = null; return; }
+  if (!S.lens && !S.pulsing && needsPulse()) { S.pulsing = true; requestAnimationFrame(pulse); }
+  const src = flatView() ? ensureFlat() : S.img.canvas, v = S.view;
+  ctx.imageSmoothingEnabled = v.z < 3;
+  if (S.lens) ctx.drawImage(src, v.ox, v.oy, cw / v.z, ch / v.z, 0, 0, cw, ch);
+  else ctx.drawImage(src, -v.ox * v.z, -v.oy * v.z, S.img.W * v.z, S.img.H * v.z);
+  const haveScale = S.rect && S.scale && S.scale.sx, R = tireD() / 2;
+
+  const ws = wheelStep();
+  if (haveScale && S.show.grid && !ws) {
+    const wb = S.vals ? S.vals.wheelbase : 1000;
+    ctx.save(); ctx.strokeStyle = COL.grid; ctx.lineWidth = 1; ctx.beginPath();
+    for (let X = -500; X <= wb + 500; X += 100) { const a = bike2s(X, -R), b = bike2s(X, 900); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+    for (let Y = Math.ceil(-R / 100) * 100; Y <= 900; Y += 100) { const a = bike2s(-500, Y), b = bike2s(wb + 500, Y); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); }
+    ctx.stroke(); ctx.restore();
+  }
+  if (haveScale && S.vals && !ws) { const wb = S.vals.wheelbase; line(bike2s(-R - 120, -R), bike2s(wb + R + 120, -R), 'rgba(255,255,255,.7)', 1, [6, 5]); }
+
+  // wheels
+  S.wheels.forEach((w, k) => {
+    if (wheelStep() && S.tirePts) {
+      const P = S.tirePts[k], q = wheelQuality(w);
+      const top = P.reduce((m, pt) => pt[1] < m[1] ? pt : m), ts = i2s(top), left = S.tirePlaced[k].filter(v => !v).length;
+      tag(ts[0], ts[1] - 30, `${k === rearIdx() ? 'Rear' : 'Front'}: ${left ? left + ' to place' : { clean: 'clean', check: 'check', none: 'not found' }[q]}`, left ? '#E6E1D3' : q === 'clean' ? '#3FB950' : q === 'check' ? '#F2C230' : '#F04438');
+      P.forEach((pt, i) => {
+        const s = i2s(pt), fl = S.flash && S.flash.k === k && S.flash.i === i, placed = S.tirePlaced[k][i];
+        // a point nobody has placed only agrees with the trace it came from, so it is never shown green
+        let col = fl ? (Math.floor((performance.now() - S.flash.t0) / 140) % 2 ? '#FFFFFF' : '#E8B04A') : tirePtColor(k, i);
+        if (!placed && col === '#3FB950') col = '#F2C230';
+        if (!placed && !fl) { // beacon: a ring that grows and fades, every 1.2 s
+          const ph = (performance.now() % 1200) / 1200;
+          ctx.save(); ctx.globalAlpha = 1 - ph; ctx.strokeStyle = col; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(s[0], s[1], 6 + 16 * ph, 0, 6.2832); ctx.stroke(); ctx.restore();
+        }
+        dot(s, col, fl ? 8 : 6);
+        handle(s, p => { P[i] = p; }, () => placeTirePt(k, i));
+      });
+    }
+    if (!w || !S.show.wheel) return;
+    ctx.save(); ctx.fillStyle = ({ clean: '#86B58E', check: '#D2BE7A', none: '#C98A82' })[wheelQuality(w)];
+    for (const p of w.pts) { const s = i2s(p); ctx.fillRect(s[0] - 1, s[1] - 1, 2, 2); }
+    ctx.restore();
+    if (S.rect) { const c = S.rect.wheels[k].circ, s0 = r2s([c.cx, c.cy]), s = [s0[0] + shakeOff('axle' + k), s0[1]]; line([s[0] - 7, s[1]], [s[0] + 7, s[1]], COL.wheel, 1.2); line([s[0], s[1] - 7], [s[0], s[1] + 7], COL.wheel, 1.2); if (!wheelStep()) locked(s0, 'axle' + k, 'axle'); }
+  });
+
+  if (haveScale && !ws) {
+    const fr = bikeFrame(S.rect), ra = r2s([fr.RA.cx, fr.RA.cy]), fa = r2s([fr.FA.cx, fr.FA.cy]);
+    if (!tabFit()) line(ra, fa, COL.geo, 1.2, [2, 5]);
+    const g = k => S.geo[k] ? i2s(S.geo[k].p) : null, sn = g('sn'), sr = g('sr'), bar = g('bar'), ht = g('ht'), hb = g('hb'), st = g('st');
+    const bbT = S.sta ? r2s(S.sta.bbR) : null; // BB after the depth correction
+    if (S.vals && !tabFit()) { const gm = bike2s(S.vals.wheelbase / 2, -R); tag(gm[0], gm[1] + 16, `wheelbase ${fmt(S.vals.wheelbase, 0)} mm`, COL.geo); }
+    // crank
+    const circ = S.bbMode === 'circle' ? S.bbCircle : S.crank;
+    if (circ && (S.show.crank || bbEditable())) {
+      ring([circ.cx, circ.cy], circ.r, COL.crank, circ.placed === false ? [6, 5] : null);
+      if (!bbEditable()) for (let a = 0; a < 360; a += 20) locked(r2s([circ.cx + circ.r * Math.cos(a / DEG), circ.cy + circ.r * Math.sin(a / DEG)]), 'bbc', 'bb'); // grabbing the ring explains itself too
+    }
+    if (S.geo.bb && S.show.crank) {
+      const ap0 = i2s(S.geo.bb.p), ap = [ap0[0] + shakeOff('bbc'), ap0[1]];
+      if (!bbEditable()) locked(ap0, 'bbc', 'bb');
+      line([ap[0] - 6, ap[1]], [ap[0] + 6, ap[1]], COL.crank, 1.2); line([ap[0], ap[1] - 6], [ap[0], ap[1] + 6], COL.crank, 1.2);
+      if (bbT && Math.hypot(bbT[0] - ap[0], bbT[1] - ap[1]) > 3) line(ap, bbT, COL.crank, 1.2, [2, 3]);
+    }
+    if (bbEditable()) {
+      // an automatically found circle becomes a hand-placed one the moment it is grabbed
+      const own = () => { if (S.bbMode === 'auto' && S.crank) { S.bbCircle = { cx: S.crank.cx, cy: S.crank.cy, r: S.crank.r, placed: true }; S.bbMode = 'circle'; } return S.bbCircle; };
+      const b = S.bbMode === 'circle' ? S.bbCircle : S.crank, pc = r2s([b.cx, b.cy]), pr = r2s([b.cx + b.r, b.cy]), toR = p => Core.apply(S.rect.H, p[0], p[1]);
+      // the circle's center is not the BB yet: the BB is this point shifted for the camera angle (the white BB mark)
+      const bc = S.touched.bb ? MARK.done : MARK.todo;
+      if (bbStep() && !S.touched.bb && !S.lens) beacon(pc, bc);
+      dot(pc, bc, 6, `Center of ${bbTarget().name}`, 0, -22); dot(pr, bc, 5);
+      handle(pc, p => { const q = toR(p), c0 = own(); c0.cx = q[0]; c0.cy = q[1]; }, snapBBCircle, 'bb');
+      handle(pr, p => { const q = toR(p), c0 = own(); c0.r = Math.max(2, Math.hypot(q[0] - c0.cx, q[1] - c0.cy)); }, snapBBCircle, 'bb');
+    }
+    // steering axis: dashed line from the ground up past the head tube; slider moves it sideways, arc turns it round the slider
+    if (S.steer && tabGeo()) {
+      const toR = q => Core.apply(S.rect.H, q[0], q[1]), G = toR(S.steer.g), T = toR(S.steer.t), s = S.scale.sx;
+      const L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1, ux = (T[0] - G[0]) / L, uy = (T[1] - G[1]) / L, gy = bikeFrame(S.rect).FA.cy + R / s;
+      const lo = [G[0] + ux * (gy - G[1]) / uy, gy], hi = [T[0] + ux * 160 / s, T[1] + uy * 160 / s];
+      line(r2s(lo), r2s(hi), COL.fit, 1.2, [7, 5]);
+      // controls sit between HT top and HT bottom: the angle arc above their midpoint, the sideways slider below it.
+      // Turning pivots on that midpoint, so it never jumps during a drag; it only moves when you move an HT point.
+      const onA = k => S.geo[k] ? toR(onSteer(S.geo[k].p)) : null, Pt = onA('ht'), Pb = onA('hb');
+      const M = Pt && Pb ? [(Pt[0] + Pb[0]) / 2, (Pt[1] + Pb[1]) / 2] : G;
+      const half = Pt && Pb ? Math.max(15 / s, Math.hypot(Pt[0] - Pb[0], Pt[1] - Pb[1]) / 4) : 35 / s; // a quarter of the head tube either side of the middle
+      const A = [M[0] + ux * half, M[1] + uy * half], B = [M[0] - ux * half, M[1] - uy * half];
+      const mS = r2s(M), aS = r2s(A), bS = r2s(B), mc = markCol('steer'), mcA = S.lockA ? COL.guess : mc, mcX = S.lockX ? COL.guess : mc;
+      const su = [aS[0] - mS[0], aS[1] - mS[1]], sl = Math.hypot(su[0], su[1]) || 1;
+      if (untouched('steer')) { if (!S.lockA) beacon(aS, mc); if (!S.lockX) beacon(bS, mc); }
+      arcGlyph([aS[0] - su[0] / sl * 70, aS[1] - su[1] / sl * 70], aS, mcA, null); // drawn as a gentle arc
+      for (const [w, cl] of [[3.5, 'rgba(0,0,0,.45)'], [1.5, mcX]]) { // sideways slider: a double arrow
+        ctx.save(); ctx.strokeStyle = cl; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.beginPath();
+        ctx.moveTo(bS[0] - 13, bS[1]); ctx.lineTo(bS[0] + 13, bS[1]);
+        for (const sg of [-1, 1]) { ctx.moveTo(bS[0] + sg * 9, bS[1] - 4); ctx.lineTo(bS[0] + sg * 13, bS[1]); ctx.lineTo(bS[0] + sg * 9, bS[1] + 4); }
+        ctx.stroke(); ctx.restore();
+      }
+      tag(aS[0] + (bikeFrame(S.rect).dir > 0 ? -70 : 70), aS[1], S.vals && S.vals.headAngle != null ? `HA ${fmt(S.vals.headAngle, 1)}°` : 'HA', COL.fit);
+      const G0 = G.slice(), T0 = T.slice(), M0 = M.slice(), nrm = [-uy, ux];
+      // where the head tube points sit at the start of the drag: they ride along with the axis
+      const HT0 = ['ht', 'hb'].filter(k => S.geo[k]).map(k => [k, toR(onSteer(S.geo[k].p))]);
+      const carry = f => { HT0.forEach(([k, q]) => { S.geo[k].p = Core.apply(S.rect.Hinv, ...f(q)); S.geo[k].src = 'set'; }); };
+      const rot = (q, cs, sn) => { const wx = q[0] - M0[0], wy = q[1] - M0[1]; return [M0[0] + wx * cs - wy * sn, M0[1] + wx * sn + wy * cs]; };
+      let q0 = null; // angle: geared, as if the arm were 600 mm, so the arc can sit close to the pivot
+      // a padlock beside each control: angle and left/right lock separately
+      const side = bikeFrame(S.rect).dir > 0 ? 28 : -28, lkA = [aS[0] + side, aS[1]], lkX = [bS[0] + side, bS[1]];
+      padlock(lkA, S.lockA); padlock(lkX, S.lockX);
+      handle(lkA, () => {}, () => { S.lockA = !S.lockA; afterChange(); }, 'lockA');
+      handle(lkX, () => {}, () => { S.lockX = !S.lockX; afterChange(); }, 'lockX');
+      if (!S.lockA) handle(aS, p => { const q = toR(p); if (!q0) q0 = q;
+        const da = ((q[0] - q0[0]) * nrm[0] + (q[1] - q0[1]) * nrm[1]) / (600 / s), cs = Math.cos(da), sn = Math.sin(da);
+        S.steer.g = Core.apply(S.rect.Hinv, ...rot(G0, cs, sn)); S.steer.t = Core.apply(S.rect.Hinv, ...rot(T0, cs, sn)); S.steer.set = true;
+        carry(q => rot(q, cs, sn)); }, null, 'steer');
+      const slide = () => { let l0 = null; return p => { const q = toR(p); if (!l0) l0 = q; const dx = q[0] - l0[0];
+        S.steer.g = Core.apply(S.rect.Hinv, G0[0] + dx, G0[1]); S.steer.t = Core.apply(S.rect.Hinv, T0[0] + dx, T0[1]); S.steer.set = true;
+        carry(q => [q[0] + dx, q[1]]); }; };
+      if (!S.lockX) { handle(bS, slide(), null, 'steer'); lineHandle(r2s(lo), r2s(hi), slide(), 'ew-resize', 'steer'); }
+    }
+    // seat tube line and fit
+    const shRef = shPlaced() && ((S.wiz == null && S.tab === 'setup') || (S.wiz != null && WIZ[S.wiz] && WIZ[S.wiz].k === 'scale')); // after Done: the line stays as a reference
+    if (S.sta && S.show.sta && bbT && (tabFit() || tabGeo() || shPlacing() || shRef)) {
+      line(r2s(S.sta.o), r2s(S.sta.end), tabGeo() ? COL.geo : COL.fit, 1.4, [7, 5]);
+      if (S.stOff && Math.abs(S.stA || 0) > 0.5) { const oS = r2s(S.sta.o); line(bbT, oS, COL.fit, 1, [2, 3]); tag((bbT[0] + oS[0]) / 2, (bbT[1] + oS[1]) / 2 + 16, `A ${fmt(S.stA, 0)}`, COL.fit); }
+      if (S.stOff && S.geoPts && S.geoPts.effSeat && S.geoPts.bb && S.vals && S.vals.seatAngle != null) { // effective seat angle: BB to the seat axis at stack height
+        const B0 = S.geoPts.bb, E = S.geoPts.effSeat, L = Math.hypot(E[0] - B0[0], E[1] - B0[1]) || 1, k = (L + 60) / L;
+        const e0 = bike2s(B0[0], B0[1]), e1 = bike2s(E[0], E[1]), e2 = bike2s(B0[0] + (E[0] - B0[0]) * k, B0[1] + (E[1] - B0[1]) * k);
+        line(e0, e2, '#E8B04A', 1.3, [9, 6]); dot(e1, '#E8B04A', 3);
+        tag(e2[0] + (bikeFrame(S.rect).dir > 0 ? -58 : 58), e2[1] - 10, `EFF. STA ${fmt(S.vals.seatAngle, 1)}°`, '#E8B04A');
+      }
+      const m = r2s([S.sta.bbR[0] + S.sta.u[0] * 260 / S.scale.sx, S.sta.bbR[1] + S.sta.u[1] * 260 / S.scale.sx]);
+    }
+    if (sn && sr && tabFit()) {
+      line(sn, sr, COL.fit, 1.2);
+      if (S.vals && S.vals.saddleTilt != null) { // tilt, on top of the rear-to-nose line
+        const t = S.vals.saddleTilt, txt = Math.abs(t) < 0.05 ? 'level' : `nose ${t > 0 ? 'up' : 'down'} ${fmt(Math.abs(t), 1)}°`;
+        tag((sn[0] + sr[0]) / 2, Math.min(sn[1], sr[1]) - 24, txt + (isGuess('saddleTilt') ? '?' : ''), COL.fit);
+      }
+    }
+    if (S.vals && S.vals.saddleHeight != null && S.sta && S.sta.sdR && S.show.sta && (tabFit() || shPlacing() || shRef)) {
+      if (shRef) dot(r2s(S.sta.sdR), COL.fit, 4);
+      const m = r2s([(S.sta.bbR[0] + S.sta.sdR[0]) / 2, (S.sta.bbR[1] + S.sta.sdR[1]) / 2]);
+      tag(m[0] + (bikeFrame(S.rect).dir > 0 ? -62 : 62), m[1] - 40, `SH ${fmt(S.vals.saddleHeight, 0)} mm${isGuess('saddleHeight') ? '?' : ''}`, COL.fit);
+    }
+    const sd = S.auto.sd ? i2s(S.auto.sd) : null, mid = S.auto.mid ? i2s(S.auto.mid) : null;
+    if (mid && tabFit()) { line([mid[0], mid[1] - 8], [mid[0], mid[1] + 8], COL.fit, 1.8); }
+    const ref = mid; // the sweet spot (engine): middle of the saddle, on its top surface
+    if (ref && bar && tabFit()) {
+      const pb = S.geo.bar.p, barR = Core.apply(S.rect.H, pb[0], pb[1]);
+      const topR = [barR[0], barR[1] - S.barD / 2 / S.scale.sx], top = r2s(topR);
+      const refR = Core.apply(S.rect.H, S.auto.mid[0], S.auto.mid[1]);
+      const corner = r2s([topR[0], refR[1]]);
+      line(ref, corner, COL.fit, 1.4, [3, 4]); line(corner, top, COL.fit, 1.6);
+      if (S.vals && S.vals.drop != null) tag(corner[0] + 52, (corner[1] + top[1]) / 2, (S.vals.drop >= 0 ? `${fmt(S.vals.drop, 0)} mm drop` : `${fmt(-S.vals.drop, 0)} mm rise`) + (isGuess('drop') ? '?' : ''), COL.fit);
+      if (S.vals && S.vals.saddleToBarReach != null) tag((ref[0] + corner[0]) / 2, (ref[1] + corner[1]) / 2 - 14, `butt to bars ${fmt(S.vals.saddleToBarReach, 0)}` + (isGuess('saddleToBarReach') ? '?' : ''), COL.fit);
+    }
+    if (bbT && S.geo.bb && !bbStep()) { const o = shakeOff('bb'); dot([bbT[0] + o, bbT[1]], COL.geo, 6, 'BB', o, 22); locked(bbT, 'bb', 'bb'); }
+  }
+  if (haveScale && !ws && tabGeo() && S.geoPts) {
+    if (!S.geoShown && TAB_KEYS.geo.every(k => !untouched(k))) S.geoShown = true;
+    if (S.geoShown) drawDims();
+  }
+  if (S.drag && S.drag.axis && !S.lens && haveScale) drawGuides(S.drag.axis.key);
+  const off = { stt: [-40, -6], sn: [26, -19], sr: [-26, -19], bar: [0, -19], ht: [-34, -6], st: [-30, 0], sd: [0, -19] };
+  for (const gdef of GEO) {
+    const pt = S.geo[gdef.k]; if (!pt || gdef.k === 'bb' || ws) continue;
+    if (gdef.grp === 'frame' ? !tabGeo() : !(tabFit() || (tabGeo() && gdef.k === 'st') || (shPlacing() && (gdef.k === 'st' || gdef.k === 'sd')))) continue;
+    const s = i2s(gdef.k === 'sd' && S.auto.sd ? S.auto.sd : pt.p), o = off[gdef.k] || [0, -19];
+    const sure = !untouched(gdef.k);
+    const col = gdef.grp === 'frame' ? COL.geo : COL.fit;
+    if (ON_AXIS[gdef.k] && S.steer && S.scale && S.scale.sx) {
+      const toR = q => Core.apply(S.rect.H, q[0], q[1]), G = toR(S.steer.g), T = toR(S.steer.t), L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1;
+      const nx = -(T[1] - G[1]) / L, ny = (T[0] - G[0]) / L, q = toR(onSteer(pt.p)), h = 25 / S.scale.sx; // ±25 mm across the axis
+      const a = r2s([q[0] - nx * h, q[1] - ny * h]), b = r2s([q[0] + nx * h, q[1] + ny * h]), m = r2s(q);
+      const mc = markCol(gdef.k);
+      if (!sure) beacon(m, mc);
+      line(a, b, COL.geo, 2); dot(m, mc, 4.5);
+      tag(m[0] + (bikeFrame(S.rect).dir > 0 ? 62 : -62), m[1], gdef.short, COL.geo);
+      handle(m, p => steerFromHT(gdef.k, p), null, gdef.k);
+      continue;
+    }
+    if (gdef.k === 'stt' && S.sta && S.scale && S.scale.sx) { // crossbar across the seat tube line, slides along it
+      const u = S.sta.u, nx = -u[1], ny = u[0], q = Core.apply(S.rect.H, ...onSeat(pt.p)), h = 25 / S.scale.sx;
+      const a = r2s([q[0] - nx * h, q[1] - ny * h]), b = r2s([q[0] + nx * h, q[1] + ny * h]), m = r2s(q);
+      const mc = markCol('stt');
+      if (!sure) beacon(m, mc);
+      line(a, b, COL.geo, 2); dot(m, mc, 4.5);
+      tag(m[0] + (bikeFrame(S.rect).dir > 0 ? -62 : 62), m[1], gdef.short, COL.geo);
+      handle(m, p => { pt.p = onSeat(p); pt.src = 'set'; }, null, 'stt');
+      continue;
+    }
+    if (gdef.k === 'st' && S.sta) {
+      // the seat tube line only turns round the BB: a geared arc just above the BB, or drag the line anywhere
+      const b = S.sta.bbR, u = S.sta.u, sw = S.sWork, toR = q => Core.apply(S.rect.H, q[0], q[1]);
+      const armMm = tabGeo() ? 170 : 600, oo = S.sta.o, A = [oo[0] + u[0] * armMm / sw, oo[1] + u[1] * armMm / sw], aS = r2s(A) /* Fit: 600 mm up, below almost any saddle; Geo: low, clear of ST top */, bS = r2s(b), a0 = Math.atan2(u[1], u[0]);
+      const mc = markCol('st');
+      if (!sure) beacon(aS, mc);
+      arcGlyph(bS, aS, mc, null); tag(aS[0] + (bikeFrame(S.rect).dir > 0 ? -66 : 66), aS[1], `STA ${fmt(S.sta.angle, 1)}°${S.stOff ? ' actual' : ''}`, col);
+      const setA = a => { pt.p = Core.apply(S.rect.Hinv, b[0] + Math.cos(a) * 640 / sw, b[1] + Math.sin(a) * 640 / sw); pt.src = 'set'; };
+      let q0 = null; // arc: geared, as if the arm were 700 mm
+      handle(aS, p => { const q = toR(p); if (!q0) q0 = q; setA(a0 + ((q[0] - q0[0]) * -Math.sin(a0) + (q[1] - q0[1]) * Math.cos(a0)) / (700 / sw)); }, null, 'st');
+      let l0 = null; // line: follows the pointer's angle round the BB
+      lineHandle(r2s(S.sta.o), r2s(S.sta.end), p => { const q = toR(p); if (!l0) l0 = q; setA(a0 + Math.atan2(q[1] - b[1], q[0] - b[0]) - Math.atan2(l0[1] - b[1], l0[0] - b[0])); }, 'grab', 'st');
+      if (S.stOff) { // left/right slider: moves the seat axis square to itself, which sets the offset A
+        const nf = S.sta.nf, at = tabGeo() ? 330 : 450, B = [oo[0] + u[0] * at / sw, oo[1] + u[1] * at / sw], bS2 = r2s(B), nS = [r2s([B[0] + nf[0], B[1] + nf[1]])[0] - bS2[0], r2s([B[0] + nf[0], B[1] + nf[1]])[1] - bS2[1]];
+        const nl = Math.hypot(nS[0], nS[1]) || 1, ex = nS[0] / nl, ey = nS[1] / nl;
+        for (const [w, cl] of [[3.5, 'rgba(0,0,0,.45)'], [1.5, MARK.done]]) {
+          ctx.save(); ctx.strokeStyle = cl; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.beginPath();
+          ctx.moveTo(bS2[0] - ex * 13, bS2[1] - ey * 13); ctx.lineTo(bS2[0] + ex * 13, bS2[1] + ey * 13);
+          for (const sg of [-1, 1]) { const tx = bS2[0] + sg * ex * 13, ty = bS2[1] + sg * ey * 13; ctx.moveTo(tx - sg * ex * 5 - ey * 4, ty - sg * ey * 5 + ex * 4); ctx.lineTo(tx, ty); ctx.lineTo(tx - sg * ex * 5 + ey * 4, ty - sg * ey * 5 - ex * 4); }
+          ctx.stroke(); ctx.restore();
+        }
+        tag(bS2[0] + (bikeFrame(S.rect).dir > 0 ? -60 : 60), bS2[1], `A ${fmt(S.stA || 0, 0)} mm`, col);
+        const A0 = S.stA || 0; let k0 = null;
+        handle(bS2, p => { const q = toR(p); if (!k0) k0 = q; S.stA = Math.round((A0 + ((q[0] - k0[0]) * nf[0] + (q[1] - k0[1]) * nf[1]) * sw) * 2) / 2; }, null, 'stoff');
+      }
+      continue;
+    }
+    if (gdef.k === 'sd' && !S.touched.st) { // the saddle top rides on the seat tube line: grey and locked until the angle is set
+      const so = shakeOff('sd'); dot([s[0] + so, s[1]], COL.guess, 6, gdef.short, o[0] + so, o[1]); locked(s, 'sd', 'sta'); continue;
+    }
+    if (!sure) beacon(s, markCol(gdef.k));
+    dot(s, markCol(gdef.k), 6, gdef.short, o[0], o[1]);
+    handle(s, p => { pt.p = p; pt.src = 'set'; }, null, gdef.k);
+  }
+  S.measures.forEach((m) => {
+    if (m.type === 'circle') {
+      const cv0 = circleValue(m);
+      if (cv0) { ring([cv0.cx, cv0.cy], cv0.r, COL.meas); const t = r2s([cv0.cx, cv0.cy - cv0.r]); tag(t[0], t[1] - 16, `Ø ${fmt(cv0.D, 1)} mm`, COL.meas); const c0 = r2s([cv0.cx, cv0.cy]); line([c0[0] - 5, c0[1]], [c0[0] + 5, c0[1]], COL.meas, 1.2); line([c0[0], c0[1] - 5], [c0[0], c0[1] + 5], COL.meas, 1.2); }
+      m.pts.forEach((q, i) => { const s = i2s(q); dot(s, COL.meas, 4.5); handle(s, p => { m.pts[i] = p; }); });
+      return;
+    }
+    const a = i2s(m.p), b = i2s(m.q), val = measureValue(m);
+    line(a, b, COL.meas, 1.6); dot(a, COL.meas, 4.5); dot(b, COL.meas, 4.5);
+    if (val) lineTag(a, b, `${fmt(val.L, 1)} mm`, COL.meas);
+    handle(a, p => { m.p = p; }); handle(b, p => { m.q = p; });
+  });
+  if (S.pending && S.pending.pts) S.pending.pts.forEach(q => dot(i2s(q), COL.meas, 4.5));
+  else if (S.pending && S.hover) { const a = i2s(S.pending.p); line(a, S.hover, COL.meas, 1.4, [4, 4]); dot(a, COL.meas, 4.5); }
+  placeTags();
+  if (S.lens) return;
+  if (ringLoupeOn()) drawRingLoupe();
+  else if (loupe.classList.contains('ring')) { loupe.classList.remove('ring'); loupe.style.display = 'none'; }
+}
+function drawLoupe(sx, sy) {
+  if (!S.img || ringLoupeOn()) return;
+  loupe.classList.remove('ring'); loupeShape(336, 336, false);
+  const src = flatView() ? ensureFlat() : S.img.canvas, v = S.view, zoom = Math.max(6, v.z * 3), n = loupe.width;
+  const vx = sx / v.z + v.ox, vy = sy / v.z + v.oy;
+  let span = 168 / zoom;
+  // holding the stem clamp or a tube-face crossbar: the magnifier shows a 100 mm window, so the whole tube end is in view
+  if (S.drag && S.drag.h && ['bar', 'stt', 'ht', 'hb'].includes(S.drag.h.key) && S.rect && S.scale && S.scale.sx) {
+    let mmPerView = S.scale.sx;
+    if (!flatView()) { const a = Core.apply(S.rect.H, vx, vy), b = Core.apply(S.rect.H, vx + 1, vy); mmPerView *= Math.hypot(b[0] - a[0], b[1] - a[1]); }
+    span = (S.drag.h.key === 'bar' ? 100 : 70) / mmPerView; // stem clamp 100 mm, tube faces 70 mm
+  }
+  const Lc = loupe.offsetWidth || 168, keep = { view: S.view, handles: S.handles, locked: S.locked, lineHandles: S.lineHandles, ctx };
+  lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.fillStyle = '#000'; lctx.fillRect(0, 0, n, n);
+  S.lens = { d: n / Lc }; S.view = Object.assign({}, keep.view, { z: Lc / span, ox: vx - span / 2, oy: vy - span / 2 }); ctx = lctx;
+  try { draw(); } finally { S.lens = null; S.view = keep.view; S.handles = keep.handles; S.locked = keep.locked; S.lineHandles = keep.lineHandles; ctx = keep.ctx; }
+  lctx.setTransform(1, 0, 0, 1, 0, 0);
+  // crosshairs with a gap in the middle so the point itself stays visible
+  lctx.beginPath(); lctx.moveTo(n / 2, 0); lctx.lineTo(n / 2, n / 2 - 14); lctx.moveTo(n / 2, n / 2 + 14); lctx.lineTo(n / 2, n);
+  lctx.moveTo(0, n / 2); lctx.lineTo(n / 2 - 14, n / 2); lctx.moveTo(n / 2 + 14, n / 2); lctx.lineTo(n, n / 2);
+  lctx.strokeStyle = 'rgba(0,0,0,.6)'; lctx.lineWidth = 5; lctx.stroke(); lctx.strokeStyle = 'rgba(255,255,255,.95)'; lctx.lineWidth = 2; lctx.stroke();
+  scaleBar(vx, vy, span);
+  const st = $('stage').getBoundingClientRect(), L = loupe.offsetWidth || 168, gap = 28;
+  let lx = sx + gap, ly = sy - gap - L;
+  if (lx + L > st.width - 8) lx = sx - gap - L;
+  if (ly < 8) ly = sy + gap;
+  loupe.style.left = Math.max(8, lx) + 'px'; loupe.style.top = Math.max(8, Math.min(st.height - L - 8, ly)) + 'px'; loupe.style.right = 'auto';
+  loupe.style.display = 'block';
+}
+function drawGuides(key) { // see-through lines parallel to the axis, to line up with the tube walls
+  const s = S.scale.sx; let o, u, t0, t1;
+  if ((key === 'st' || key === 'stoff') && S.sta) { o = S.sta.o; u = S.sta.u; t0 = 0; t1 = ((S.vals && S.vals.saddleHeight) || 750) / s; }
+  else if (key === 'steer' && S.steer) {
+    const G = Core.apply(S.rect.H, ...S.steer.g), T = Core.apply(S.rect.H, ...S.steer.t), L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1;
+    o = G; u = [(T[0] - G[0]) / L, (T[1] - G[1]) / L];
+    const tp = k => { if (!S.geo[k]) return null; const q = Core.apply(S.rect.H, ...onSteer(S.geo[k].p)); return (q[0] - o[0]) * u[0] + (q[1] - o[1]) * u[1]; };
+    const a = tp('hb'), b = tp('ht'); t0 = Math.min(a ?? -80 / s, b ?? 80 / s) - 120 / s; t1 = Math.max(a ?? -80 / s, b ?? 80 / s) + 120 / s;
+  } else return;
+  const nx = -u[1], ny = u[0];
+  ctx.save(); ctx.lineWidth = 1;
+  for (const w of AXIS_GUIDES[key]) for (const sg of [-1, 1]) {
+    const off = sg * w / 2 / s, A = r2s([o[0] + nx * off + u[0] * t0, o[1] + ny * off + u[1] * t0]), B = r2s([o[0] + nx * off + u[0] * t1, o[1] + ny * off + u[1] * t1]);
+    ctx.strokeStyle = w === AXIS_GUIDES[key][0] ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.35)';
+    ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+  }
+  ctx.restore();
+}
+function loupeShape(w, h, tall) {
+  if (loupe.width !== w) loupe.width = w; if (loupe.height !== h) loupe.height = h;
+  loupe.classList.toggle('tall', tall);
+}
+// Turning the seat tube angle or the steering axis: a tall 100 x 200 mm window that stays where you clicked, with
+// see-through guide lines parallel to the axis (seat tube 25 and 35 mm apart, head tube 40 and 60 mm) to line up with the tube walls.
+const AXIS_GUIDES = { st: [25, 35], stoff: [25, 35], steer: [40, 60] };
+function drawAxisLoupe(a) {
+  if (!S.img || !S.rect || !S.scale || !S.scale.sx) return;
+  loupe.classList.remove('ring'); loupeShape(240, 480, true);
+  const Wc = loupe.offsetWidth || 120, d = loupe.width / Wc, vx = a.vx, vy = a.vy;
+  let mmPerView = S.scale.sx;
+  if (!flatView()) { const p = Core.apply(S.rect.H, vx, vy), q = Core.apply(S.rect.H, vx + 1, vy); mmPerView *= Math.hypot(q[0] - p[0], q[1] - p[1]); }
+  const spanW = 100 / mmPerView, spanH = 200 / mmPerView;
+  const keep = { view: S.view, handles: S.handles, locked: S.locked, lineHandles: S.lineHandles, ctx };
+  lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.fillStyle = '#000'; lctx.fillRect(0, 0, loupe.width, loupe.height);
+  S.lens = { d }; S.view = Object.assign({}, keep.view, { z: Wc / spanW, ox: vx - spanW / 2, oy: vy - spanH / 2 }); ctx = lctx;
+  try {
+    draw();
+    // the axis now, in corrected-image px
+    let o, u;
+    if ((a.key === 'st' || a.key === 'stoff') && S.sta) { o = S.sta.o; u = S.sta.u; }
+    else if (a.key === 'steer' && S.steer) { const G = Core.apply(S.rect.H, ...S.steer.g), T = Core.apply(S.rect.H, ...S.steer.t), L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1; o = G; u = [(T[0] - G[0]) / L, (T[1] - G[1]) / L]; }
+    if (o) {
+      const s = S.scale.sx, c0 = Core.apply(S.rect.H, ...fromView([vx, vy])), t = (c0[0] - o[0]) * u[0] + (c0[1] - o[1]) * u[1];
+      const m = [o[0] + u[0] * t, o[1] + u[1] * t], nx = -u[1], ny = u[0], far = 400 / s;
+      ctx.save(); ctx.setTransform(d, 0, 0, d, 0, 0); ctx.lineWidth = 1;
+      for (const w of AXIS_GUIDES[a.key]) for (const sg of [-1, 1]) {
+        const off = sg * w / 2 / s, A = r2s([m[0] + nx * off - u[0] * far, m[1] + ny * off - u[1] * far]), B = r2s([m[0] + nx * off + u[0] * far, m[1] + ny * off + u[1] * far]);
+        ctx.strokeStyle = w === AXIS_GUIDES[a.key][0] ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.3)';
+        ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  } finally { S.lens = null; S.view = keep.view; S.handles = keep.handles; S.locked = keep.locked; S.lineHandles = keep.lineHandles; ctx = keep.ctx; }
+  lctx.setTransform(1, 0, 0, 1, 0, 0);
+  scaleBar(vx, vy, spanW);
+  // stays put beside the click
+  const st = $('stage').getBoundingClientRect(), Wd = loupe.offsetWidth || 120, Hd = loupe.offsetHeight || 240, gap = 36;
+  let lx = a.sx + gap; if (lx + Wd > st.width - 8) lx = a.sx - gap - Wd;
+  loupe.style.left = Math.max(8, lx) + 'px'; loupe.style.top = Math.max(8, Math.min(st.height - Hd - 8, a.sy - Hd / 2)) + 'px'; loupe.style.right = 'auto';
+  loupe.style.display = 'block';
+}
+function scaleBar(vx, vy, span) {
+  const n = loupe.width;
+  if (S.rect && S.scale && S.scale.sx) { // scale bar in millimetres
+    let mmPerView = S.scale.sx;
+    if (!flatView()) { const a = Core.apply(S.rect.H, vx, vy), b = Core.apply(S.rect.H, vx + 1, vy); mmPerView *= Math.hypot(b[0] - a[0], b[1] - a[1]); }
+    const pxPerMm = (n / span) / mmPerView, len = [1, 2, 5, 10, 20, 50, 100].find(L => L * pxPerMm >= n * 0.22) || 100, w = len * pxPerMm, x0 = 16, y0 = loupe.height - 20;
+    lctx.fillStyle = 'rgba(0,0,0,.6)'; lctx.fillRect(x0 - 8, y0 - 34, Math.max(w, 70) + 16, 46);
+    lctx.strokeStyle = '#fff'; lctx.lineWidth = 3; lctx.beginPath();
+    lctx.moveTo(x0, y0 - 8); lctx.lineTo(x0, y0); lctx.lineTo(x0 + w, y0); lctx.lineTo(x0 + w, y0 - 8);
+    if (len >= 10) for (let i = 1; i < len / (len >= 50 ? 10 : len >= 10 ? 5 : 1); i++) { const xx = x0 + w * i / (len / (len >= 50 ? 10 : 5)); lctx.moveTo(xx, y0 - 5); lctx.lineTo(xx, y0); }
+    lctx.stroke();
+    lctx.fillStyle = '#fff'; lctx.font = '500 22px "IBM Plex Mono", ui-monospace, monospace'; lctx.textBaseline = 'alphabetic'; lctx.fillText(`${len} mm`, x0, y0 - 13);
+  }
+}
+// While the chainring circle is being adjusted, the magnifier frames the whole ring with the circle drawn on it,
+// so the circle can be lined up with the ring's edge all the way round.
+// the BB circle is only edited in the BB step of setup, or after setup is finished
+const bbStep = () => S.wiz != null && WIZ[S.wiz] && WIZ[S.wiz].k === 'bb';
+const tabSetup = () => S.wiz == null && S.tab === 'setup';
+const bbEditable = () => !!((S.bbMode === 'circle' ? S.bbCircle : S.crank) && (bbStep() || tabSetup()));
+// the whole-ring magnifier: only while the circle is held in the Fit tab (the BB step of setup is already zoomed in)
+const ringLoupeOn = () => !!(bbEditable() && (tabSetup() || bbStep()) && S.side === 'drive' && S.rect && !S.blocked && S.drag && S.drag.h && S.drag.h.key === 'bb');
+function drawRingLoupe() {
+  loupeShape(336, 336, false);
+  const src = flatView() ? ensureFlat() : S.img.canvas, b = S.bbMode === 'circle' ? S.bbCircle : S.crank, n = loupe.width;
+  const c = rect2view([b.cx, b.cy]), e = rect2view([b.cx + b.r, b.cy]), rv = Math.hypot(e[0] - c[0], e[1] - c[1]);
+  const span = 2.5 * rv, k = n / span, L = p => [(p[0] - c[0]) * k + n / 2, (p[1] - c[1]) * k + n / 2];
+  lctx.imageSmoothingEnabled = true; lctx.fillStyle = '#000'; lctx.fillRect(0, 0, n, n);
+  lctx.drawImage(src, c[0] - span / 2, c[1] - span / 2, span, span, 0, 0, n, n);
+  lctx.beginPath();
+  for (let a = 0; a <= 360; a += 2) { const q = L(rect2view([b.cx + b.r * Math.cos(a / DEG), b.cy + b.r * Math.sin(a / DEG)])); a ? lctx.lineTo(q[0], q[1]) : lctx.moveTo(q[0], q[1]); }
+  lctx.strokeStyle = 'rgba(0,0,0,.6)'; lctx.lineWidth = 4; lctx.stroke(); lctx.strokeStyle = COL.crank; lctx.lineWidth = 1.5; lctx.stroke();
+  const m = n / 2; lctx.beginPath(); lctx.moveTo(m - 10, m); lctx.lineTo(m + 10, m); lctx.moveTo(m, m - 10); lctx.lineTo(m, m + 10); lctx.stroke();
+  lctx.fillStyle = 'rgba(22,21,19,.9)'; lctx.fillRect(0, 0, 150, 30); lctx.fillStyle = '#E6E1D3';
+  lctx.font = '500 16px "IBM Plex Mono", ui-monospace, monospace'; lctx.textBaseline = 'middle'; lctx.fillText('CHAINRING', 12, 15);
+  scaleBar(c[0], c[1], span);
+  loupe.style.left = 'auto'; loupe.style.right = '14px'; loupe.style.top = '14px';
+  loupe.classList.add('ring'); loupe.style.display = 'block';
+}
+
+// ---------- interaction ----------
+function banner(html) { const b = $('banner'); if (html) { b.innerHTML = html; b.style.display = 'block'; } else b.style.display = 'none'; }
+function setTool(t, info) {
+  S.tool = t; S.pending = null; S.toolInfo = info || null;
+  cv.classList.toggle('tool', !!t);
+  $('tMeas').setAttribute('aria-pressed', String(t === 'meas')); $('tCirc').setAttribute('aria-pressed', String(t === 'circ'));
+  if (!t) { banner(''); if (!ringLoupeOn()) loupe.style.display = 'none'; }
+  else if (t === 'meas') banner('<b>Line:</b> click one end, then the other. The length shows on the photo. Esc cancels.');
+  else if (t === 'circ') banner('<b>Circle:</b> click three points spread around an edge, such as the outside of a rotor. Esc cancels.');
+  else if (t.startsWith('geo:')) { const g = GEO.find(g => g.k === t.slice(4)); banner(`<b>${esc(g.name)}:</b> ${esc(g.hint)} Scroll to zoom. Esc cancels.`); }
+  draw();
+}
+function refit(k) { const { gray, W, H } = S.img; S.wheels[k] = Core.fitWheel(gray, W, H, S.inits[k]); afterChange(); }
+const UNDO_KEYS = ['ringOff', 'boltOff', 'lockA', 'lockX', 'stOff', 'stA', 'lowerHS', 'base', 'geo', 'steer', 'touched', 'geoShown', 'measures', 'bbMode', 'bbCircle', 'sideSet', 'wb', 'sh', 'tireAct', 'tireSel', 'forkOffset', 'sadRef', 'dropTo', 'barD', 'chartId', 'customChart'];
+const histSnap = () => { const o = {}; for (const k of UNDO_KEYS) o[k] = S[k]; return JSON.stringify(o); };
+function histRecord() {
+  const H = S.hist || (S.hist = { undo: [], redo: [], cur: null }), now = histSnap();
+  if (H.cur === now) return;
+  if (H.cur != null) { H.undo.push(H.cur); if (H.undo.length > 200) H.undo.shift(); H.redo = []; }
+  H.cur = now; histButtons();
+}
+function histGo(back) {
+  const H = S.hist; if (!H || S.drag) return;
+  const from = back ? H.undo : H.redo, to = back ? H.redo : H.undo;
+  if (!from.length) return;
+  to.push(H.cur); H.cur = from.pop();
+  Object.assign(S, JSON.parse(H.cur)); S.crankKey = '';
+  afterChange(); histButtons();
+}
+function histButtons() { const H = S.hist || { undo: [], redo: [] }; $('undo').disabled = !H.undo.length; $('redo').disabled = !H.redo.length; }
+function save() {
+  if (S.img && S.wiz == null) histRecord();
+  try {
+    if (!S.storeKey) return;
+    const o = {}; for (const k of SAVE_KEYS) o[k] = S[k];
+    localStorage.setItem(S.storeKey, JSON.stringify(o));
+  } catch (e) {}
+}
+function afterChange() { recompute(); syncInputs(); renderAll(); draw(); save(); renderSideAsk(); }
+function clickAt(sx, sy) {
+  const p = s2i(sx, sy);
+  if (S.tool === 'circ') {
+    const pts = (S.pending && S.pending.pts ? S.pending.pts : []).concat([p]);
+    if (pts.length < 3) { S.pending = { pts }; banner(`<b>Circle:</b> ${3 - pts.length} more point${pts.length === 2 ? '' : 's'} on the edge. Esc cancels.`); draw(); return; }
+    S.measures.push({ id: 'm' + (S.uid++), type: 'circle', pts });
+    setTool(null); afterChange();
+  } else if (S.tool === 'meas') {
+    if (!S.pending) { S.pending = { p }; draw(); return; }
+    S.measures.push({ id: 'm' + (S.uid++), p: S.pending.p, q: p });
+    setTool(null); afterChange();
+  } else if (S.tool && S.tool.startsWith('geo:')) {
+    const k = S.tool.slice(4);
+    S.geo[k] = { p: ON_AXIS[k] ? onSteer(p) : k === 'stt' ? onSeat(p) : p, depth: 0, auto: false };
+    const grp = S.toolInfo && S.toolInfo.chain, next = grp ? GEO.find(g => g.grp === grp && !S.geo[g.k]) : null;
+    setTool(next ? 'geo:' + next.k : null, next ? { chain: grp } : null);
+    afterChange();
+  }
+}
+cv.addEventListener('pointerdown', e => {
+  if (!S.img) return;
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  cv.setPointerCapture(e.pointerId);
+  let best = null, bd = 14;
+  for (const h of S.handles) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } }
+  if (best && !S.tool) { if (best.key) S.touched[best.key] = true; S.drag = { h: best, x, y, moved: true, riders: ridersStart(best.key), axis: axisAt(best.key, x, y) }; if (!S.drag.axis && !/^lock/.test(best.key || '')) drawLoupe(best.x, best.y); return; }
+  if (!S.tool) { // a locked point explains itself, even where a line runs through it
+    let lk = null, ld = 12;
+    for (const h of S.locked || []) { const d = Math.hypot(h.x - x, h.y - y); if (d < ld) { ld = d; lk = h; } }
+    if (lk) { S.drag = null; shakeLocked(lk); return; }
+  }
+  if (!S.tool) { const lh = nearLine(x, y); if (lh) { if (lh.key) S.touched[lh.key] = true; S.drag = { h: lh, x, y, moved: true, line: true, riders: ridersStart(lh.key), axis: axisAt(lh.key, x, y) }; return; } }
+  S.drag = { pan: true, x, y, x0: x, y0: y, moved: false };
+});
+cv.addEventListener('pointermove', e => {
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  S.hover = [x, y];
+  const d = S.drag;
+  if (d && d.h) {
+    d.h.set(s2i(x, y)); recompute(); draw();
+    if (!d.axis && !d.line && !/^lock/.test(d.h.key || '')) { // find the point again where it was just drawn: it may sit on a line, away from the pointer
+      let hp = null, bd = Infinity;
+      for (const h of S.handles) if ((h.key || null) === (d.h.key || null)) { const dd = Math.hypot(h.x - x, h.y - y); if (dd < bd) { bd = dd; hp = h; } }
+      drawLoupe(hp ? hp.x : x, hp ? hp.y : y);
+    }
+    renderFit(); renderSta(); renderGeo();
+  }
+  else if (d && d.pan) {
+    if (!d.moved && Math.hypot(x - d.x0, y - d.y0) > 4) d.moved = true;
+    if (d.moved) { S.view.ox -= (x - d.x) / S.view.z; S.view.oy -= (y - d.y) / S.view.z; d.x = x; d.y = y; draw(); }
+  } else if (S.tool) { drawLoupe(x, y); if (S.pending) draw(); }
+  else if (!d) { const lh = nearLine(x, y); cv.style.cursor = lh ? lh.cursor : ''; }
+});
+cv.addEventListener('pointerup', e => {
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, d = S.drag;
+  S.drag = null;
+  if (!d) return;
+  if (d.h) { if (!ringLoupeOn()) loupe.style.display = 'none'; recompute(); baseCheck(d.h.key); if (d.h.end) d.h.end(); else afterChange(); }
+  else if (!d.moved && S.tool) clickAt(x, y);
+  else if (!d.moved && S.wiz != null) wizClick(x, y);
+});
+cv.addEventListener('pointerleave', () => { S.hover = null; if (!S.drag && !ringLoupeOn()) loupe.style.display = 'none'; });
+cv.addEventListener('wheel', e => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && S.tool) setTool(null);
+  if (!(e.ctrlKey || e.metaKey) || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); histGo(true); }
+  else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); histGo(false); }
+});
+new ResizeObserver(sizeCanvas).observe($('stage'));
+
+// ---------- side panel ----------
+const chip = (cls, t) => `<span class="chip ${cls}">${esc(t)}</span>`;
+const pill = (cls, text) => `<span class="pill ${cls}">${esc(text)}</span>`;
+function renderGrade() {
+  $('sideChip').innerHTML = S.blocked || !S.sideAuto ? '' : S.sideSet ? chip('set', 'Set') : S.sideConf === 'high' ? chip('auto', 'Auto') : chip('def', 'Check');
+  if (S.blocked) {
+    $('gradeOut').innerHTML = `<div class="grade"><div class="hd"><span class="big poor">Tires not traced</span></div><p class="note">Both tire edges have to be traced before anything can be measured. Outline the tires in setup; if the edge still can't be found, retake the photo against a plainer background.</p></div>`;
+    $('wheelNote').innerHTML = ''; return;
+  }
+  const g = gradePhoto(); if (!g) { $('gradeOut').innerHTML = ''; return; }
+  const word = { good: 'Good photo', ok: 'Usable photo', poor: 'Retake advised' }[g.level];
+  let h = `<div class="grade"><div class="hd"><span class="big ${g.level}">${word}</span></div><div class="gi">`;
+  for (const i of g.items) {
+    h += `<span class="d ${i.level}"></span><span>${esc(i.label)}</span><span class="val">${esc(i.value)}</span>`;
+    if (i.advice) h += `<span class="adv">${esc(i.advice)}</span>`;
+  }
+  $('gradeOut').innerHTML = h + '</div></div>';
+  $('wheelNote').innerHTML = g.slant >= 1.5 && S.flatten
+    ? `<p class="note">The photo has been corrected to square-on. Because the camera was ${fmt(g.slant, 0)}° off, axle ends and other parts that stick out from the wheel look off-center; the axles are taken from the tire outlines instead.</p>` : '';
+}
+
+function renderScale() {
+  const sc = S.scale;
+  if (!S.rect || !sc || !sc.iso) { for (const k of ['tire', 'wb', 'sh']) { $(k + 'Read').textContent = '–'; $(k + 'Chk').innerHTML = ''; } $('scaleOut').innerHTML = ''; return; }
+  const s = sc.sx;
+  // From photo: what the photo reads. Tire: the estimate from the rim. Known: typed in. The difference: photo, at the
+  // combined scale, minus known.
+  // Photo: what the photo reads at the scale set by the known values. Blank until something is known, because before
+  // that any reading rests on a guessed scale. A difference needs two known values to check against each other.
+  const known = [S.tireAct, S.wb, S.sh].filter(v => v > 0).length;
+  const rows = {
+    tire: { now: sc.tirePx * s, known: S.tireAct, tol: tireTol() },
+    wb: { now: sc.wbPx * s, known: S.wb, tol: TOL.wb },
+    sh: { now: !shPlaced() ? null : sc.shPx != null ? sc.shPx * s : (S.vals ? S.vals.saddleHeight : null), known: S.sh, tol: TOL.sh },
+  };
+  for (const k in rows) {
+    const r = rows[k];
+    $(k + 'Read').textContent = known && r.now != null ? fmt(r.now, 1) : '–';
+    let st = '';
+    if (known >= 2 && r.known > 0 && r.now != null) { const d = r.now - r.known, a = Math.abs(d); st = pill(a <= r.tol ? 'good' : a <= 2 * r.tol ? 'ok' : 'poor', `${d >= 0 ? '+' : '−'}${fmt(a, 1)}`); }
+    $(k + 'Chk').innerHTML = st;
+  }
+  const shOk = shPlaced() || S.sh > 0;
+  $('sh').disabled = !shOk; $('sh').placeholder = shOk ? 'mm' : 'place Top';
+  $('tireManualRow').style.display = S.tireSel === 'manual' ? '' : 'none';
+  let h = '';
+  if (S.tireSel && S.tireSel !== 'manual') h += `<p class="note">A tire size is nominal: real tires vary with brand and rim width, so it counts as ±${TOL.tireSize} mm. A measured diameter or a measured wheelbase is better.</p>`;
+  if (!known) h += '<p class="note warn">No scale yet: enter the wheelbase, or pick the tire size.</p>';
+  if (S.sh > 0) h += '<p class="note">A known saddle height sets part of the scale, so the saddle height in Fit is partly your own number fed back.</p>';
+  h += `<dl class="kv"><dt>Combined scale</dt><dd>${fmt(sc.iso.s, 4)} mm/px ± ${fmt(sc.iso.sigS / sc.iso.s * 100, 2)}%</dd></dl>`;
+  $('scaleOut').innerHTML = h;
+}
+
+function renderBB() {
+  let h = '';
+  const tg = bbTarget(), where = S.side === 'drive' ? 'the chainring' : 'the crank bolt, or the hole at the end of the spindle';
+  if (!S.scale || !S.scale.sx) h = S.blocked ? '' : '<p>Set the scale first.</p>';
+  else if (S.bbMode === 'auto' && S.crank) {
+    const c = S.crank, s = S.scale.sx;
+    h = `<div class="sline">${chip('auto', 'Auto')}<span>Found from the ${tg.name}, Ø ${fmt(2 * c.r * s, 0)} mm</span></div>`;
+    h += `<p class="note">Check that the yellow circle sits on ${where}. Drag its center or its edge handle on the photo to adjust it.</p>`;
+  } else if (S.bbCircle && !S.bbCircle.placed) {
+    h = `<div class="sline">${chip('fail', 'Place circle')}<span>No clear ${tg.name} found</span></div>`;
+    h += `<p class="note warn">Drag the dashed circle onto ${where}; drag the small handle to resize it.</p>`;
+  } else if (S.bbCircle) {
+    h = `<div class="sline">${chip('set', 'Set')}<span>Circle placed on the ${tg.name}</span></div>`;
+  }
+  const g = gradePhoto();
+  if (g && S.geo.bb && S.flatten && S.tilt) {
+    const a = -S.rect.levelDeg / DEG, tx = Math.cos(a) * S.tilt.a - Math.sin(a) * S.tilt.b, ty = Math.sin(a) * S.tilt.a + Math.cos(a) * S.tilt.b;
+    const shift = S.bbDepth * Math.hypot(tx, ty);
+    if (g.slant >= 1.5) h += `<p class="note">The camera was ${fmt(g.slant, 0)}° off square, so the BB is not at the center of the ${tg.name} in the photo. It has been shifted ${fmt(shift, 0)} mm for the camera angle: the yellow dot is the center of the circle, and the BB (the white BB mark in the Fit tab) is that point moved for the camera angle.</p>`;
+  }
+  if (S.vals && S.vals.chainstay != null) h += `<dl class="kv"><dt>Chainstay</dt><dd>${fmt(S.vals.chainstay, 1)} mm</dd><dt>BB drop</dt><dd>${fmt(S.vals.bbDrop, 1)} mm</dd></dl>`;
+  const isD = S.side === 'drive';
+  h += `<div class="fields"><label class="f">${isD ? 'Chainring' : 'Crank bolt'} offset from the frame centerline, mm <input type="number" id="bbOff" step="1" min="0" value="${isD ? (S.ringOff || 50) : (S.boltOff || 70)}" style="width:66px"></label></div>`;
+  h += `<p class="note">The ${isD ? 'chainring sits about 50 mm' : 'crank bolt sits about 70 mm'} out from the middle of the frame, so on an angled photo it shows shifted from the BB. Change it if yours differs.</p>`;
+  $('bbOut').innerHTML = h;
+  $('bbOff').onchange = e => { const v = parseFloat(e.target.value); if (v > 0) { if (isD) S.ringOff = v; else S.boltOff = v; } afterChange(); };
+}
+
+function renderSta() {
+  const st = S.sta; let h = '', ch = '';
+  if (!st) h = S.blocked ? '' : '<p>Needs the bottom bracket.</p>';
+  else if (st.src === 'set') ch = chip('set', 'Set');
+  else if (st.src === 'auto') { ch = chip('auto', 'Auto'); if (st.det) h = `<p class="note">Traced along ${fmt(st.det.span, 0)} mm of seatpost and tube. Move the ST point to change it.</p>`; }
+  else {
+    ch = chip('def', 'Default');
+    h = `<p class="note warn">${st.det && st.det.conf === 'low' ? 'The seat tube was traced, but not cleanly enough to trust' : 'The seat tube could not be traced'}, so 73.5° is used. Drag the ST point onto the seatpost, or type the angle.</p>`;
+  }
+  $('staChip').innerHTML = ch; $('staOut').innerHTML = h;
+  $('staAuto').style.display = st && st.src === 'set' ? '' : 'none';
+}
+
+function valRow(k, label, unit, ref, custom) {
+  const v = S.vals; if (!v || v[k] == null) return '';
+  const ang = unit === '°', e = S.mc && S.mc[k] != null ? S.mc[k] : null;
+  let h = `<tr><td>${label}${isGuess(k) ? '<span class="gtag">guess</span>' : ''}</td><td class="v">${fmt(v[k], ang ? 2 : 1)} ${unit}</td><td class="e">${e == null ? '…' : fmt(e, ang ? 2 : 1)}</td>`;
+  if (ref) { const r = ref[k], d = r == null ? null : v[k] - r, big = d != null && e != null && Math.abs(d) > 2 * Math.max(e, ang ? 0.2 : 1);
+    const cell = custom ? `<input class="ci" type="number" step="0.1" data-k="${k}" value="${r == null ? '' : r}">` : (r == null ? '' : r);
+    h += `<td class="e">${cell}</td><td class="e" ${big ? 'style="color:var(--warn)"' : ''}>${d == null ? '' : (d >= 0 ? '+' : '−') + fmt(Math.abs(d), ang ? 2 : 1)}</td>`; }
+  return h + '</tr>';
+}
+// Fit rows: the geometry engine's FIT / PARAMETERS / DERIVED outputs. Sweet spot = the middle of the saddle, on its top surface.
+function fitRows() {
+  return [
+    ['sec', 'Fit'],
+    ['saddleHeight', S.sh > 0 && S.scale && S.scale.shPx != null ? 'Saddle height (also used for scale)' : 'Saddle height', 'mm'],
+    ['saddleSetback', 'Setback (nose)', 'mm'], ['sweetSpotSetback', 'Setback (sweet spot)', 'mm'],
+    S.vals && S.vals.drop < 0 ? ['rise', 'Bar rise (to top of bar)', 'mm'] : ['drop', 'Bar drop (to top of bar)', 'mm'],
+    ['saddleToBarReach', 'Butt to bars (level)', 'mm'], ['noseToBarDirect', 'Nose to bar', 'mm'],
+    ['sec', 'Parameters'],
+    ['Hx', 'Hx', 'mm'], ['Hy', 'Hy', 'mm'], ['barH', 'H (BB to bar)', 'mm'], ['barTheta', 'Theta', '°'],
+    ['effSeatAngleSaddle', 'Seat angle to saddle', '°'], ['saddleToBarDrop', 'Bar drop (to bar center)', 'mm'],
+    ['sec', 'Saddle'], ['saddleLen', 'Saddle length', 'mm'], ['saddleTilt', 'Saddle tilt, nose up +', '°'],
+  ];
+}
+function renderFit() {
+  let h = '';
+  if (!S.scale || !S.scale.sx) h = '<p>Needs the tires traced in setup.</p>';
+  else if (!S.geo.bb) h = '<p>Needs the bottom bracket.</p>';
+  else {
+    const left = TAB_KEYS.fit.filter(untouched).length;
+    if (left) h += `<p class="note warn">${left} point${left > 1 ? 's are' : ' is'} still yellow on the photo. Numbers that depend on them are marked GUESS until you place them.</p>`;
+    let body = '', pend = '';
+    for (const r of fitRows()) {
+      if (r[0] === 'sec') { pend = `<tr class="sec"><td colspan="3">${r[1]}</td></tr>`; continue; }
+      const row = valRow(r[0], r[1], r[2]); if (row) { body += pend + row; pend = ''; }
+    }
+    h += body ? `<table class="g"><tr class="hd"><td></td><td class="v">value</td><td class="e">±</td></tr>${body}</table>` : '';
+  }
+  $('fitOut').innerHTML = h;
+}
+function renderGeo() {
+  const sel = $('chartSel');
+  if (!sel.options.length) sel.innerHTML = '<option value="">No chart</option>' + CHARTS.map(ch => `<option value="${ch.id}">${esc(ch.name)}</option>`).join('') + '<option value="custom">Custom: type values in</option>';
+  sel.value = S.chartId || '';
+  if (!S.vals) { $('geoOut').innerHTML = '<p>Needs the tires traced in setup.</p>'; return; }
+  const ref = chartRef(), custom = S.chartId === 'custom', chart = CHARTS.find(ch => ch.id === S.chartId);
+  let body = '';
+  for (const [k, label, unit] of ROWS) {
+    if (k === 'sec') { body += `<tr class="sec"><td colspan="${ref ? 5 : 3}">${label}</td></tr>`; continue; }
+    if (!S.stOff && (k === 'seatAngleActual' || k === 'stOffsetA')) continue;
+    const lab = k === 'trail' && S.forkOffset > 0 ? `Trail, with ${fmt(S.forkOffset, 1)} mm offset` : k === 'seatAngle' && S.stOff ? 'Seat angle, effective (at stack height)' : label;
+    body += valRow(k, lab, unit, ref, custom);
+  }
+  const left = TAB_KEYS.geo.filter(untouched).length;
+  let h = left ? `<p class="note warn">${left} frame point${left > 1 ? 's are' : ' is'} still yellow on the photo. Numbers that depend on them are marked GUESS until you place them.</p>` : '';
+  h += `<table class="g"><tr class="hd"><td></td><td class="v">photo</td><td class="e">±</td>${ref ? '<td class="e">chart</td><td class="e">diff</td>' : ''}</tr>${body}</table>`;
+  if (chart) h += `<p class="note">Chart: ${esc(chart.name)}, from ${esc(chart.src)}. A difference is highlighted when it is more than twice the ±.</p>`;
+  if (S.vals.trail != null) h += `<p class="note">Trail uses the tire radius from the photo (${fmt(S.scale ? (S.rect.wheels[0].circ.r + S.rect.wheels[1].circ.r) / 2 * S.scale.sx : null, 1)} mm). Fork offset is hard to read from a photo; enter the spec value if you know it.</p>`;
+  $('geoOut').innerHTML = h;
+}
+
+function renderFlatten() {
+  const t = S.tilt;
+  if (!t || !S.rect) { $('flatOut').innerHTML = '<p>Needs both wheels.</p>'; return; }
+  const sd = t.cov ? t.cov.map((r, i) => Math.sqrt(r[i])) : [0, 0, 0];
+  const yaw = Math.atan(t.a) * DEG, pitch = Math.atan(t.b) * DEG, yawS = sd[0] / (1 + t.a * t.a) * DEG, pitS = sd[1] / (1 + t.b * t.b) * DEG;
+  const side = Math.abs(yaw) < 2 * yawS ? 'square-on' : (yaw < 0 ? 'right end nearer' : 'left end nearer');
+  const up = Math.abs(pitch) < 2 * pitS ? 'level' : (pitch < 0 ? 'camera looking up' : 'camera looking down');
+  const oor = rect => rect.wheels.map(w => { const e = Core.ellExtents(w.ell); return (e.h / e.w - 1) * 100; });
+  const sg = v => (v >= 0 ? '+' : '') + fmt(v, 2) + '%';
+  let h = '<dl class="kv">';
+  h += `<dt>Sideways angle (yaw)</dt><dd>${fmt(Math.abs(yaw), 1)}° ± ${fmt(yawS, 1)} <small>${side}</small></dd>`;
+  h += `<dt>Up/down angle (pitch)</dt><dd>${fmt(Math.abs(pitch), 1)}° ± ${fmt(pitS, 1)} <small>${up}</small></dd>`;
+  h += `<dt>Focal length ${t.fixed ? 'used' : 'estimated'}</dt><dd>${isFinite(t.f35) ? fmt(t.f35, 0) + ' mm' : '–'}</dd>`;
+  if (S.scale && isFinite(S.scale.Z)) h += `<dt>Camera distance, rough</dt><dd>≈ ${fmt(S.scale.Z / 1000, 0)} m</dd>`;
+  h += `<dt>Tires taller than wide, in the photo</dt><dd>${oor(S.rectRaw).map(sg).join('  ')}</dd>`;
+  h += `<dt>${S.flatten ? 'after correction' : 'correction is off'}</dt><dd>${oor(S.rect).map(sg).join('  ')}</dd>`;
+  h += `<dt>Ground leveled by</dt><dd>${fmt(S.rect.levelDeg, 2)}°</dd></dl>`;
+  $('flatOut').innerHTML = h;
+}
+function circleValue(m) {
+  if (!S.rect || !S.scale || !S.scale.sx) return null;
+  const [A, B, C] = m.pts.map(q => Core.apply(S.rect.H, q[0], q[1]));
+  const d = 2 * (A[0] * (B[1] - C[1]) + B[0] * (C[1] - A[1]) + C[0] * (A[1] - B[1]));
+  if (Math.abs(d) < 1e-9) return null;
+  const s2 = q => q[0] * q[0] + q[1] * q[1];
+  const cx = (s2(A) * (B[1] - C[1]) + s2(B) * (C[1] - A[1]) + s2(C) * (A[1] - B[1])) / d;
+  const cy = (s2(A) * (C[0] - B[0]) + s2(B) * (A[0] - C[0]) + s2(C) * (B[0] - A[0])) / d;
+  const r = Math.hypot(A[0] - cx, A[1] - cy);
+  return { cx, cy, r, D: 2 * r * S.scale.sx };
+}
+function measureValue(m) {
+  if (!S.rect || !S.scale || !S.scale.sx) return null;
+  const P = Core.apply(S.rect.H, m.p[0], m.p[1]), Q = Core.apply(S.rect.H, m.q[0], m.q[1]);
+  const dx = (Q[0] - P[0]) * S.scale.sx, dy = -(Q[1] - P[1]) * S.scale.sy, L = Math.hypot(dx, dy), rel = S.scale.iso.sigS / S.scale.iso.s;
+  let ang = Math.abs(Math.atan2(dy, dx) * DEG); if (ang > 90) ang = 180 - ang;
+  return { L, dx: Math.abs(dx), dy: Math.abs(dy), ang, sig: Math.hypot(L * rel, 1.414 * S.clickSig * S.scale.sx) };
+}
+function renderAll() {
+  renderWiz(); renderGrade(); renderScale(); renderBB(); renderSta(); renderFit(); renderGeo(); renderFlatten();
+  $('vOrig').setAttribute('aria-pressed', String(S.view.mode !== 'flat')); $('vFlat').setAttribute('aria-pressed', String(S.view.mode === 'flat'));
+  scheduleMC();
+}
+
+// ---------- setup wizard ----------
+// Walks through every point in order, zoomed to each area. Guessed points only count once OK is pressed on their step.
+const boxR = (pts, padMm) => { const p = padMm / S.sWork, xs = pts.map(q => q[0]), ys = pts.map(q => q[1]); return [[Math.min(...xs) - p, Math.min(...ys) - p], [Math.max(...xs) + p, Math.max(...ys) + p]]; };
+const ptR = k => S.geo[k] ? Core.apply(S.rect.H, S.geo[k].p[0], S.geo[k].p[1]) : null;
+const around = (pad, ...ks) => { const pts = ks.map(ptR).filter(Boolean); return pts.length ? boxR(pts, pad) : null; };
+const WIZ = [
+  { k: 'wheels', title: 'Tire outlines', keys: [],
+    text: () => S.autoGood && S.tirePlaced.flat().every(v => v) && !S.wheelsHand
+      ? 'Both tires were traced cleanly and agree with each other after the camera correction, so the points start green. Check that they sit on the outer edge of the tire, not the rim; move any that don\'t, or press OK.'
+      : (S.autoWhy && S.autoWhy.length && !S.wheelsHand ? `The automatic trace needs checking: ${S.autoWhy.join('; ')}. ` : '') + 'Each tire has five points, placed from a first guess. Zoom in and put every one exactly on the outer edge of the tire: drag it, or click near it to move it there. Pulsing points haven\'t been placed yet. The colours show how well the traced tire edge agrees with each point and update as you go: aim for all green.',
+    status: () => S.wheels.map((w, k) => { const q = wheelQuality(w); return `${k === rearIdx() ? 'Rear' : 'Front'} tire: ${q === 'clean' ? 'traced cleanly' : q === 'check' ? 'traced, but not cleanly: check the dots' : 'edge not found: move the outline onto the tire'}`; }),
+    enter: () => { S.view.mode = 'orig'; },
+    can: () => { const left = S.tirePlaced.flat().filter(v => !v).length;  // pulsing points are the ones still to place
+      if (left) return `Place all ten points first: ${left} still to place.`;
+      return S.wheels.every(w => wheelQuality(w) !== 'none') ? true : 'Both tire edges have to be traced first. If they can\'t be, the photo needs a plainer background.'; },
+    zoom: () => null },
+  { k: 'bb', title: 'Bottom bracket', show: ['photoPanel', 'bbPanel'],
+    text: () => `The yellow circle should sit on ${S.side === 'drive' ? 'the outer edge of the chainring' : 'the crank bolt, or the hole at the end of the spindle'} all the way round. Drag the circle or its edge handle until it lines up, or click to move it there.`,
+    enter: () => { S.view.mode = 'flat'; },
+    can: () => S.geo.bb ? true : 'Place the circle first.',
+    zoom: () => { const b = S.bbCircle || S.crank; return b ? [[b.cx - 1.8 * b.r, b.cy - 1.8 * b.r], [b.cx + 1.8 * b.r, b.cy + 1.8 * b.r]] : null; } },
+  { k: 'scale', title: 'Scale', show: ['scalePanel'],
+    text: () => 'Give the photo a scale: measure the wheelbase if you can, or pick the tire size.',
+    enter: () => { S.view.mode = 'flat'; },
+    can: () => S.wb > 0 || S.tireAct > 0 ? true : 'Enter the wheelbase, or pick the tire size.' },
+];
+function zoomTo(b) {
+  const r = cv.getBoundingClientRect(), w = b[1][0] - b[0][0], h = b[1][1] - b[0][1];
+  S.view.mode = 'flat';
+  const z = Math.min(8, Math.min(r.width / w, r.height / h) * 0.85);
+  S.view.z = z; S.view.ox = (b[0][0] + b[1][0]) / 2 - r.width / (2 * z); S.view.oy = (b[0][1] + b[1][1]) / 2 - r.height / (2 * z);
+  draw();
+}
+function wizGo(i) {
+  const cur = S.wiz != null ? WIZ[S.wiz] : null;
+  if (cur && cur.leave) cur.leave();
+  S.wiz = i; $('wizMsg').textContent = '';
+  if (i != null && WIZ[i].enter) WIZ[i].enter();
+  afterChange();
+  const z = i != null && WIZ[i].zoom ? WIZ[i].zoom() : null;
+  if (z) zoomTo(z); else { if (i != null && WIZ[i].k === 'wheels') S.view.mode = 'orig'; fitView(); renderAll(); }
+}
+function renderWiz() {
+  const on = S.wiz != null, st = on ? WIZ[S.wiz] : null;
+  $('wiz').style.display = on ? '' : 'none';
+  $('tabbar').style.display = on ? 'none' : '';
+  for (const b of document.querySelectorAll('#tabbar button')) {
+    b.setAttribute('aria-selected', String(b.dataset.tab === S.tab));
+    const n = (TAB_KEYS[b.dataset.tab] || []).filter(untouched).length; // a small mark on tabs with points still to check
+    b.innerHTML = b.dataset.tab === 'setup' ? 'Setup' : b.dataset.tab === 'fit' ? 'Fit' : 'Geometry';
+    if (n && S.rect) b.innerHTML += '<span class="dotn"></span>';
+  }
+  for (const p of document.querySelectorAll('#aside > .panel')) if (p.id !== 'wiz') p.style.display = on ? ([].concat(st.show || []).includes(p.id) ? '' : 'none') : (p.dataset.tab === S.tab ? '' : 'none');
+  if (!on) return;
+  $('wizStrip').innerHTML = WIZ.map((_, i) => `<span class="${i < S.wiz ? 'done' : i === S.wiz ? 'now' : ''}"></span>`).join('');
+  $('wizStrip').style.gridTemplateColumns = `repeat(${WIZ.length}, 1fr)`;
+  $('wizN').textContent = `${S.wiz + 1}/${WIZ.length}`; $('wizTitle').textContent = st.title;
+  $('wizText').innerHTML = `<p>${esc(st.text())}</p>` + (st.status ? st.status().map(t => `<p class="note">${esc(t)}</p>`).join('') : '');
+  $('wizBack').style.visibility = S.wiz > 0 ? 'visible' : 'hidden';
+  $('wizOk').disabled = false;
+}
+function wizOk() {
+  const st = WIZ[S.wiz], ok = st.can ? st.can() : true;
+  if (ok !== true) { $('wizMsg').textContent = ok; return; }
+  if (S.wiz + 1 < WIZ.length) wizGo(S.wiz + 1);
+  else { S.setupDone = true; S.tab = 'fit'; wizGo(null); }
+}
+// In a point step a click (not a drag) moves that step's point there; in the BB step it moves the circle.
+function wizClick(x, y) {
+  if (S.wiz == null || !S.rect) return;
+  const st = WIZ[S.wiz], p = s2i(x, y);
+  if (st.k === 'bb' && S.bbCircle) { const q = Core.apply(S.rect.H, p[0], p[1]); S.bbCircle = { ...S.bbCircle, cx: q[0], cy: q[1], placed: true }; S.bbMode = 'circle'; afterChange(); return; }
+  if (st.k === 'wheels' && S.tirePts) {
+    let best = null, bd = 1e9;
+    S.tirePts.forEach((P, w) => P.forEach((pt, i) => { const s = i2s(pt), d = Math.hypot(s[0] - x, s[1] - y); if (d < bd) { bd = d; best = [w, i]; } }));
+    if (best && bd < 80) { S.tirePts[best[0]][best[1]] = p; placeTirePt(best[0], best[1]); }
+    return;
+  }
+  if (!st.keys || !st.keys.length) return;
+  let k = st.keys[0];
+  if (st.keys.length > 1) {
+    const d = kk => { const q = i2s(kk === 'sd' && S.auto.sd ? S.auto.sd : S.geo[kk].p); return Math.hypot(q[0] - x, q[1] - y); };
+    k = st.keys.filter(kk => S.geo[kk]).sort((a, b) => d(a) - d(b))[0];
+  }
+  if (k === 'st' && S.sta) { const q = Core.apply(S.rect.H, p[0], p[1]), b = S.sta.bbR, L = Math.hypot(q[0] - b[0], q[1] - b[1]) || 1, d = 640 / S.sWork; S.geo.st = { depth: 0, p: Core.apply(S.rect.Hinv, b[0] + (q[0] - b[0]) / L * d, b[1] + (q[1] - b[1]) / L * d), src: 'set' }; afterChange(); return; }
+  S.geo[k] = { ...(S.geo[k] || { depth: 0 }), p, src: 'set' };
+  afterChange();
+}
+$('wizOk').onclick = wizOk;
+$('wizBack').onclick = () => { if (S.wiz > 0) wizGo(S.wiz - 1); };
+$('wizRestart').onclick = () => { S.setupDone = false; wizGo(0); };
+for (const b of document.querySelectorAll('#tabbar button')) b.onclick = () => { S.tab = b.dataset.tab; S.view.mode = 'flat'; afterChange(); };
+$('chartSel').onchange = e => { S.chartId = e.target.value; afterChange(); };
+$('geoOut').addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.k; if (!k) return; const v = parseFloat(e.target.value); if (v > 0) S.customChart[k] = v; else delete S.customChart[k]; afterChange(); });
+
+// ---------- controls ----------
+$('resetPhoto').onclick = () => { if (!S.src) return; try { localStorage.removeItem(S.storeKey); } catch (e) {} loadImage(S.src, S.preset); };
+$('exTilted').onclick = () => loadImage(EXAMPLES.tilted.src, EXAMPLES.tilted);
+$('exDead').onclick = () => loadImage(EXAMPLES.dead.src, EXAMPLES.dead);
+$('exStairs').onclick = () => loadImage(EXAMPLES.stairs.src, EXAMPLES.stairs);
+$('file').onchange = e => { const f = e.target.files[0]; if (f) loadImage(f, null); e.target.value = ''; };
+document.querySelector('label[for="file"]').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+$('stage').addEventListener('dragover', e => e.preventDefault());
+$('stage').addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) loadImage(f, null); });
+$('vOrig').onclick = () => { S.view.mode = 'orig'; renderAll(); draw(); };
+$('vFlat').onclick = () => { S.view.mode = 'flat'; renderAll(); draw(); };
+const center = () => { const r = cv.getBoundingClientRect(); return [r.width / 2, r.height / 2]; };
+$('zIn').onclick = () => zoomAt(1.4, ...center());
+$('zOut').onclick = () => zoomAt(1 / 1.4, ...center());
+$('zFit').onclick = fitView;
+for (const [id, k] of [['tWheel', 'wheel'], ['tCrank', 'crank'], ['tSta', 'sta'], ['tGrid', 'grid']])
+  $(id).onclick = e => { S.show[k] = !S.show[k]; e.target.setAttribute('aria-pressed', String(S.show[k])); draw(); };
+const askSide = v => { S.sideAsked = true; if (v !== S.side) setSide(v); else afterChange(); if (S.wiz != null) wizGo(S.wiz); };
+const setSide = v => { for (const k of ['st', 'sd', 'sr', 'sn', 'bar']) if (S.geo[k] && S.geo[k].src !== 'set') delete S.geo[k]; S.sideSet = v === S.sideAuto ? null : v; S.bbMode = 'auto'; S.bbCircle = null; S.bbAdjust = false; S.crankKey = ''; if (S.geo.bb) delete S.geo.bb; afterChange(); };
+$('sideDrive').onclick = () => setSide('drive');
+$('sideNds').onclick = () => setSide('nds');
+for (const b of document.querySelectorAll('.sref .seg button')) b.onclick = () => {
+  S[b.dataset.ref + 'Mode'] = b.dataset.m; afterChange();
+  if (b.dataset.m === 'actual') { const inp = $(b.dataset.ref === 'tire' ? 'tireD' : b.dataset.ref); if (!inp.value) inp.focus(); }
+};
+$('wb').onchange = e => { const v = parseFloat(e.target.value); S.wb = v > 300 ? v : null; afterChange(); };
+$('shPlace').onclick = () => {
+  S.shPlace = !S.shPlace; $('shPlace').setAttribute('aria-pressed', String(S.shPlace)); $('shPlace').textContent = S.shPlace ? 'Done' : shPlaced() ? 'Move saddle top' : 'Place saddle top';
+  afterChange();
+  if (S.shPlace && S.sta && S.sta.sdR) zoomTo(boxR([S.sta.bbR, S.sta.sdR], 120)); else fitView();
+};
+$('tireD').onchange = e => { const v = parseFloat(e.target.value); S.tireSel = 'manual'; S.tireAct = v > 300 ? v : null; afterChange(); };
+$('tireManual').onclick = () => {
+  if (S.tireSel === 'manual') { S.tireSel = ''; S.tireAct = null; afterChange(); return; }
+  S.tireSel = 'manual'; const v = parseFloat($('tireD').value); S.tireAct = v > 300 ? v : null; afterChange(); $('tireD').focus();
+};
+$('tireSel').onchange = e => {
+  const v = e.target.value, t = TIRES.find(x => x[0] === v);
+  S.tireSel = v; S.tireAct = t ? t[1] : v === 'manual' ? (parseFloat($('tireD').value) > 300 ? parseFloat($('tireD').value) : null) : null;
+  afterChange();
+  if (v === 'manual') $('tireD').focus();
+};
+$('bbAuto').onclick = () => { S.bbMode = 'auto'; S.bbCircle = null; S.crankKey = ''; if (S.geo.bb) delete S.geo.bb; afterChange(); };
+$('staManual').onchange = e => {
+  const v = parseFloat(e.target.value); if (!(v > 55 && v < 90) || !S.sta) return;
+  const fr = bikeFrame(S.rect), b = S.sta.bbR, s = S.sWork, th = v / DEG;
+  S.geo.st = { p: Core.apply(S.rect.Hinv, b[0] - fr.dir * Math.cos(th) * 640 / s, b[1] - Math.sin(th) * 640 / s), depth: 0, src: 'set' };
+  afterChange();
+};
+$('staAuto').onclick = () => { delete S.geo.st; afterChange(); };
+const seg = (a, b, key, va, vb) => { $(a).onclick = () => { S[key] = va; syncInputs(); afterChange(); }; $(b).onclick = () => { S[key] = vb; syncInputs(); afterChange(); }; };
+$('stStraight').onclick = () => { S.stOff = false; afterChange(); };
+$('stOffset').onclick = () => { S.stOff = true; afterChange(); };
+$('lowerHS').onchange = e => { const v = parseFloat(e.target.value); S.lowerHS = v >= 0 ? v : 1; afterChange(); };
+$('barD').onchange = e => { const v = parseFloat(e.target.value); if (v > 15) { S.barD = v; afterChange(); } };
+$('flattenOn').onchange = e => { S.flatten = e.target.checked; afterChange(); };
+$('focalMode').onchange = e => { S.focalMode = e.target.value; $('f35').disabled = S.focalMode !== 'fixed'; if (S.focalMode === 'fixed' && !S.f35) { S.f35 = 50; $('f35').value = 50; } afterChange(); };
+$('f35').onchange = e => { const v = parseFloat(e.target.value); if (v >= 10) { S.f35 = v; afterChange(); } };
+$('clickSig').onchange = e => { S.clickSig = Math.max(0.1, parseFloat(e.target.value) || 1); afterChange(); };
+function startPlace(grp) {
+  const list = GEO.filter(g => g.grp === grp);
+  if (list.every(g => S.geo[g.k])) for (const g of list) delete S.geo[g.k];
+  const next = list.find(g => !S.geo[g.k]);
+  recompute(); renderAll(); setTool('geo:' + next.k, { chain: grp });
+}
+$('tMeas').onclick = () => setTool(S.tool === 'meas' ? null : 'meas');
+$('tCirc').onclick = () => setTool(S.tool === 'circ' ? null : 'circ');
+$('tClear').onclick = () => { S.measures = []; if (S.tool === 'meas' || S.tool === 'circ') setTool(null); afterChange(); };
+$('sh').onchange = e => { const v = parseFloat(e.target.value); S.sh = v > 300 ? v : null; afterChange(); };
+$('forkOff').onchange = e => { const v = parseFloat(e.target.value); S.forkOffset = v > 0 ? v : null; afterChange(); };
+$('resetPts').onclick = () => { try { localStorage.removeItem(S.storeKey); } catch (e) {} if (S.preset) loadImage(S.preset.src, S.preset); else { S.geo = {}; S.measures = []; S.bbMode = 'auto'; S.bbCircle = null; afterChange(); } };
+const flash = t => { $('copyMsg').textContent = t; setTimeout(() => { $('copyMsg').textContent = ''; }, 2500); };
+$('copyGeo').onclick = async () => {
+  if (!S.vals) return;
+  const rows = fitRows().concat(ROWS).filter(r => r[0] !== 'sec' && S.vals[r[0]] != null);
+  const lines = rows.map(([k, label, unit]) => `${label}\t${fmt(S.vals[k], unit === '°' ? 2 : 1)}\t${unit}\t±${S.mc && S.mc[k] != null ? fmt(S.mc[k], unit === '°' ? 2 : 1) : ''}`);
+  if (S.sta) lines.unshift(`Seat tube angle (${S.sta.auto ? 'automatic' : 'manual'})\t${fmt(S.sta.angle, 1)}\t°\t`);
+  try { await navigator.clipboard.writeText(lines.join('\n')); flash('Copied.'); } catch (err) { flash('Copy was blocked here.'); }
+};
+$('copyPts').onclick = async () => {
+  const o = { side: S.side, wheelbase: S.wb, tireD: tireD(), bbMode: S.bbMode, geo: {} };
+  for (const k in S.geo) o.geo[k] = S.geo[k].p.map(v => +v.toFixed(1));
+  try { await navigator.clipboard.writeText(JSON.stringify(o)); flash('Points copied.'); } catch (err) { flash('Copy was blocked here.'); }
+};
+
+
+sizeCanvas();
+loadImage(EXAMPLES.tilted.src, EXAMPLES.tilted);
+
+$('undo').onclick = () => histGo(true); $('redo').onclick = () => histGo(false); histButtons();
+
+$('askDrive').onclick = () => askSide('drive'); $('askNds').onclick = () => askSide('nds');
