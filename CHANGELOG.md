@@ -45,6 +45,9 @@ Rolling back = pasting the previous version's link.
 - Knobby hint: with Road picked, if both tires trace nearly all round but scattered 1.2-6 mm (knobs), the tire step
   says so with Switch to Mountain / Switch to Gravel.
 
+- Fix: Reset photo reloaded your photo as Road (and 700c tire sizes); it now keeps the bike type and wheel sizes.
+- The tire step names the bike type it is judging the tires as (e.g. Bike: Mountain, 29 front / 29 rear).
+
 ## v2 (released 2026-11-25: datum-v2.js?v=1795643586)
 - Tan sidewalls: once a dot on a wheel is placed by hand, the trace only looks within 5 mm of the outline through
   the dots and takes the edge nearest it. Before, the strong tan/black edge inside the tread pulled the trace up to

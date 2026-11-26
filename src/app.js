@@ -1885,7 +1885,7 @@ const WIZ = [
       : S.autoGood && S.tirePlaced.flat().every(v => v) && !S.wheelsHand
       ? 'Both tires were traced cleanly and agree with each other after the camera correction, so the points start green. Check that they sit on the outer edge of the tire, not the rim; move any that don\'t, or press OK.'
       : (S.autoWhy && S.autoWhy.length && !S.wheelsHand ? `The automatic trace needs checking: ${S.autoWhy.join('; ')}. ` : '') + 'Each tire has five points, placed from a first guess. Zoom in and put every one exactly on the outer edge of the tire' + (TR().knob ? ', on the tips of the knobs' : '') + ': drag it, or click near it to move it there. Pulsing points haven\'t been placed yet. The colours show how well the traced tire edge agrees with each point and update as you go: aim for all green.',
-    status: () => S.rough ? [] : S.wheels.map((w, k) => { const q = wheelQuality(w); return `${k === rearIdx() ? 'Rear' : 'Front'} tire: ${q === 'clean' ? 'traced cleanly' : q === 'check' ? 'traced, but not cleanly: check the dots' : 'edge not found: move the outline onto the tire'}`; }),
+    status: () => [bikeLine()].concat(S.rough ? [] : S.wheels.map((w, k) => { const q = wheelQuality(w); return `${k === rearIdx() ? 'Rear' : 'Front'} tire: ${q === 'clean' ? 'traced cleanly' : q === 'check' ? 'traced, but not cleanly: check the dots' : 'edge not found: move the outline onto the tire'}`; })),
     enter: () => { S.view.mode = 'orig'; },
     can: () => { const left = S.tirePlaced.flat().filter(v => !v).length;  // pulsing points are the ones still to place
       if (left) return `Place all ten points first: ${left} still to place.`;
@@ -1926,6 +1926,8 @@ function wizGo(i) {
   const z = i != null && WIZ[i].zoom ? WIZ[i].zoom() : null;
   if (z) zoomTo(z); else { if (i != null && WIZ[i].k === 'wheels') S.view.mode = 'orig'; fitView(); renderAll(); }
 }
+// which bike type and wheel sizes the tires are being judged as, so a wrong pick shows
+const bikeLine = () => `Bike: ${TR().name}${S.bike === 'mtb' ? `, ${wheelF()} front / ${wheelR()} rear` : ''}. Change it in Setup > Photo.`;
 // Road picked but the tires trace like knobby ones: nearly the whole edge found, but scattered by mm, not tenths
 const knobbyHint = () => S.bike === 'road' && S.wiz != null && WIZ[S.wiz].k === 'wheels' && !S.rough && !S.wizInfo && S.wheels.every(w => w && !w.fromDots && w.coverage >= 0.6 && rmsMm(w) >= 1.2 && rmsMm(w) <= 6);
 function renderWiz() {
@@ -2029,7 +2031,8 @@ $('chartSel').onchange = e => { S.chartId = e.target.value; afterChange(); };
 $('geoOut').addEventListener('change', e => { const k = e.target.dataset && e.target.dataset.k; if (!k) return; const v = parseFloat(e.target.value); if (v > 0) S.customChart[k] = v; else delete S.customChart[k]; afterChange(); });
 
 // ---------- controls ----------
-$('resetPhoto').onclick = () => { if (!S.src) return; try { localStorage.removeItem(S.storeKey); } catch (e) {} loadImage(S.src, S.preset); };
+// starting the photo over keeps the bike type and wheel sizes picked for it (before, it fell back to Road)
+$('resetPhoto').onclick = () => { if (!S.src) return; try { localStorage.removeItem(S.storeKey); } catch (e) {} loadImage(S.src, S.preset, S.preset ? null : { bike: S.bike, wf: S.wheelF, wr: S.wheelR }); };
 // start screen: what DATUM is, then your own photo or one of two examples
 function showStart(on) {
   $('start').style.display = on ? 'flex' : 'none';
