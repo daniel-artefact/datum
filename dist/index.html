@@ -2308,6 +2308,22 @@ function beacon(s, col) {
   ctx.beginPath(); ctx.arc(s[0], s[1], (6 + 16 * ph) * UI(), 0, 6.2832); ctx.stroke(); ctx.restore();
 }
 // a line that can be dragged: a, b in screen px; points have priority over lines
+// the grey circles of the rough pass: near the outline sizes the circle, inside it moves it
+function nearCircle(x, y, ring) {
+  let hit = null;
+  for (const h of S.circHandles || []) {
+    const d = Math.hypot(x - h.x, y - h.y);
+    if (Math.abs(d - h.r) <= ring) { hit = { h, mode: 'size' }; break; }
+    if (d < h.r && !hit) hit = { h, mode: 'move' };
+  }
+  if (!hit) return null;
+  const c = S.roughC[hit.h.k], c0 = { ...c }, p0 = s2i(x, y), k = hit.h.k;
+  const keepOrder = () => { // the left circle stays left of the right one, so they can't swap
+    const L = S.roughC[0], R = S.roughC[1], gap = 0.6 * (L.r + R.r);
+    if (R.cx - L.cx < gap) { if (k === 0) L.cx = R.cx - gap; else R.cx = L.cx + gap; } };
+  return { key: 'rough', mode: hit.mode, end: () => draw(),
+    set: p => { if (hit.mode === 'move') { c.cx = c0.cx + p[0] - p0[0]; c.cy = c0.cy + p[1] - p0[1]; } else c.r = Math.max(20, Math.hypot(p[0] - c.cx, p[1] - c.cy)); keepOrder(); } };
+}
 function lineHandle(a, b, set, cursor, key) { S.lineHandles.push({ a, b, set, cursor, key }); }
 function nearLine(x, y, rad = 8) {
   let best = null, bd = rad;
@@ -2357,7 +2373,7 @@ function draw() {
   ctx.setTransform(d, 0, 0, d, 0, 0);
   const cw = tc.width / d, ch = tc.height / d;
   ctx.clearRect(0, 0, cw, ch);
-  S.handles = []; S.locked = []; S.lineHandles = []; S.tagQ = S.lens ? null : [];
+  S.handles = []; S.locked = []; S.lineHandles = []; S.circHandles = []; S.tagQ = S.lens ? null : [];
   if (!S.img) { S.tagQ = null; return; }
   if (!S.lens && !S.pulsing && needsPulse()) { S.pulsing = true; requestAnimationFrame(pulse); }
   const src = flatView() ? ensureFlat() : S.img.canvas, v = S.view;
@@ -2380,16 +2396,11 @@ function draw() {
   if (wheelStep() && S.rough && S.roughC) {
     S.roughC.forEach((c, k) => {
       const cs = i2s([c.cx, c.cy]), es = i2s([c.cx + c.r, c.cy]), rs = Math.hypot(es[0] - cs[0], es[1] - cs[1]);
-      ctx.save(); ctx.fillStyle = 'rgba(200,198,190,.22)'; ctx.strokeStyle = 'rgba(230,225,211,.85)'; ctx.lineWidth = 2;
+      // Daniel 2026-11-25: no centre dot (people would fixate on the axle); drag inside to move, drag the outline to size
+      ctx.save(); ctx.fillStyle = 'rgba(200,198,190,.38)'; ctx.strokeStyle = 'rgba(240,236,224,.95)'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(cs[0], cs[1], rs, 0, 6.2832); ctx.fill(); ctx.stroke(); ctx.restore();
       tag(cs[0], cs[1] - rs - 22, k === rearIdx() ? 'Rear' : 'Front', '#E6E1D3');
-      dot(cs, '#E6E1D3', 6); dot(es, '#E6E1D3', 6);
-      const other = S.roughC[1 - k], keepOrder = () => { // the left circle stays left of the right one, so they can't swap
-        const L = S.roughC[0], R = S.roughC[1], gap = 0.6 * (L.r + R.r);
-        if (R.cx - L.cx < gap) { if (k === 0) L.cx = R.cx - gap; else R.cx = L.cx + gap; } };
-      handle(cs, p => { c.cx = p[0]; c.cy = p[1]; keepOrder(); }, () => draw(), 'rough');
-      handle(es, p => { c.r = Math.max(20, Math.hypot(p[0] - c.cx, p[1] - c.cy)); keepOrder(); }, () => draw(), 'rough');
-      void other;
+      S.circHandles.push({ k, x: cs[0], y: cs[1], r: rs });
     });
   }
   // wheels
@@ -2847,6 +2858,7 @@ cv.addEventListener('pointerdown', e => {
     for (const h of S.locked || []) { const d = Math.hypot(h.x - x, h.y - y); if (d < ld) { ld = d; lk = h; } }
     if (lk) { S.drag = null; shakeLocked(lk); return; }
   }
+  if (!S.tool) { const ch = nearCircle(x, y, touch ? 16 : 9); if (ch) { S.drag = { h: ch, x, y, moved: true, line: true }; return; } }
   if (!S.tool) { const lh = nearLine(x, y, touch ? 16 : 8); if (lh) { if (lh.key) S.touched[lh.key] = true; S.drag = { h: lh, x, y, moved: true, line: true, riders: ridersStart(lh.key), axis: axisAt(lh.key, x, y) }; return; } }
   S.drag = { pan: true, x, y, x0: x, y0: y, moved: false };
 });
@@ -2876,7 +2888,7 @@ cv.addEventListener('pointermove', e => {
     if (!d.moved && Math.hypot(x - d.x0, y - d.y0) > 4) d.moved = true;
     if (d.moved) { S.view.ox -= (x - d.x) / S.view.z; S.view.oy -= (y - d.y) / S.view.z; d.x = x; d.y = y; draw(); }
   } else if (S.tool) { drawLoupe(x, y); if (S.pending) draw(); }
-  else if (!d) { const lh = nearLine(x, y); cv.style.cursor = lh ? lh.cursor : ''; }
+  else if (!d) { const ch = nearCircle(x, y, 9); const lh = ch ? null : nearLine(x, y); cv.style.cursor = ch ? (ch.mode === 'size' ? 'nwse-resize' : 'move') : lh ? lh.cursor : ''; }
 });
 const endPointer = e => {
   PTR.delete(e.pointerId);
@@ -3113,7 +3125,7 @@ const ptR = k => S.geo[k] ? Core.apply(S.rect.H, S.geo[k].p[0], S.geo[k].p[1]) :
 const around = (pad, ...ks) => { const pts = ks.map(ptR).filter(Boolean); return pts.length ? boxR(pts, pad) : null; };
 const WIZ = [
   { k: 'wheels', title: 'Tire outlines', keys: [],
-    text: () => S.rough ? 'DATUM couldn\'t find the tires on its own. Drag each grey circle over its tire by the middle dot, and size it with the edge dot: rough is fine. Then press Trace.'
+    text: () => S.rough ? 'DATUM couldn\'t find the tires on its own. Drag each grey circle over its tire, and drag its outline to size it: rough is fine. Then press Trace.'
       : S.autoGood && S.tirePlaced.flat().every(v => v) && !S.wheelsHand
       ? 'Both tires were traced cleanly and agree with each other after the camera correction, so the points start green. Check that they sit on the outer edge of the tire, not the rim; move any that don\'t, or press OK.'
       : (S.autoWhy && S.autoWhy.length && !S.wheelsHand ? `The automatic trace needs checking: ${S.autoWhy.join('; ')}. ` : '') + 'Each tire has five points, placed from a first guess. Zoom in and put every one exactly on the outer edge of the tire' + (TR().knob ? ', on the tips of the knobs' : '') + ': drag it, or click near it to move it there. Pulsing points haven\'t been placed yet. The colours show how well the traced tire edge agrees with each point and update as you go: aim for all green.',
@@ -3158,6 +3170,8 @@ function wizGo(i) {
   const z = i != null && WIZ[i].zoom ? WIZ[i].zoom() : null;
   if (z) zoomTo(z); else { if (i != null && WIZ[i].k === 'wheels') S.view.mode = 'orig'; fitView(); renderAll(); }
 }
+// Road picked but the tires trace like knobby ones: nearly the whole edge found, but scattered by mm, not tenths
+const knobbyHint = () => S.bike === 'road' && S.wiz != null && WIZ[S.wiz].k === 'wheels' && !S.rough && !S.wizInfo && S.wheels.every(w => w && !w.fromDots && w.coverage >= 0.6 && rmsMm(w) >= 1.2 && rmsMm(w) <= 6);
 function renderWiz() {
   const on = S.wiz != null, st = on ? WIZ[S.wiz] : null;
   $('wiz').style.display = on && S.img ? '' : 'none'; // no setup bar before there is a photo
@@ -3183,6 +3197,10 @@ function renderWiz() {
     $('wizText').innerHTML = `<p>${st.html ? st.html() : esc(st.text())}</p>` + (st.status ? st.status().map(t => `<p class="note">${esc(t)}</p>`).join('') : '');
     $('wizBack').style.visibility = S.wiz > 0 ? 'visible' : 'hidden';
     $('wizOk').textContent = st.k === 'wheels' && S.rough ? 'Trace' : 'OK';
+    if (knobbyHint()) {
+      $('wizText').insertAdjacentHTML('beforeend', '<p class="note warn">These look like knobby tires, which never trace cleanly as Road. <button class="btn small" id="hintMtb">Switch to Mountain</button> <button class="btn small" id="hintGravel">Switch to Gravel</button></p>');
+      $('hintMtb').onclick = () => setBike('mtb'); $('hintGravel').onclick = () => setBike('gravel');
+    }
   }
   $('wizOk').disabled = false;
 }

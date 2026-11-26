@@ -15,10 +15,26 @@ async def main():
         rough = await pg.evaluate("() => ({ rough: S.rough, circles: S.roughC && S.roughC.map(c => [Math.round(c.cx), Math.round(c.cy), Math.round(c.r)]), ok: $('wizOk').textContent })")
         print('first guess thrown out:', rough)
         await pg.evaluate("() => { showStart(false); draw(); }"); await pg.screenshot(path='/tmp/mtb_rough.png')
+        # drag inside a circle to move it, its outline to size it: no zoom window either way
+        box = await pg.evaluate("() => { const r = cv.getBoundingClientRect(); const h = S.circHandles[0]; return [r.left, r.top, h.x, h.y, h.r]; }")
+        c0 = await pg.evaluate("() => ({ ...S.roughC[0] })")
+        X, Y = box[0] + box[2], box[1] + box[3]
+        await pg.mouse.move(X + 10, Y + 10); await pg.mouse.down(); await pg.mouse.move(X + 40, Y + 30, steps=5)
+        loupeMove = await pg.evaluate("() => loupe.style.display === 'block'"); await pg.mouse.up()
+        c1 = await pg.evaluate("() => ({ ...S.roughC[0] })")
+        h = await pg.evaluate("() => { const h = S.circHandles[0]; return [h.x, h.y, h.r]; }")
+        X2, Y2 = box[0] + h[0] + h[2], box[1] + h[1]
+        await pg.mouse.move(X2, Y2); await pg.mouse.down(); await pg.mouse.move(X2 + 25, Y2, steps=5)
+        loupeSize = await pg.evaluate("() => loupe.style.display === 'block'"); await pg.mouse.up()
+        c2 = await pg.evaluate("() => ({ ...S.roughC[0] })")
+        print('circle drag: moved', round(c1['cx'] - c0['cx']), round(c1['cy'] - c0['cy']), 'resized', round(c2['r'] - c1['r']), '| zoom window:', loupeMove, loupeSize, '| centre dot handles:', await pg.evaluate("() => S.handles.filter(h => h.key === 'rough').length"))
+        await pg.screenshot(path='/tmp/mtb_rough.png')
         tr = await pg.evaluate("() => { S.roughC = [{ cx: 655, cy: 1160, r: 360 }, { cx: 1850, cy: 1180, r: 355 }]; wizOk(); return { rough: S.rough, q: S.wheels.map(wheelQuality), ok: $('wizOk').textContent }; }")
         print('after Trace from rough circles:', tr)
         an = await pg.evaluate("() => { S.wheels[0] = null; S.blocked = true; afterChange(); wizOk(); const m1 = $('wizMsg').textContent; wizOk(); const btn = !!$('wizAnyway'); $('wizAnyway').click(); return { first: m1, button: btn, step: WIZ[S.wiz].k, slide: !!S.wizInfo, q: S.wheels.map(wheelQuality) }; }")
         print('continue anyway:', an)
+        hint = await pg.evaluate("() => { S.anyway = false; S.wizInfo = false; S.bike = 'road'; S.wheelsHand = true; S.tirePts = S.wheels.map(w => ellPts(w.ell)); S.wheelInit = S.tirePts.map(ptsToEll); S.wheels = [0, 1].map(handTrace); S.wiz = 0; afterChange(); renderWiz(); const on = !!$('hintMtb'); if (on) $('hintMtb').click(); return { shown: on, bike: S.bike, q: S.wheels.map(wheelQuality) }; }")
+        print('knobby hint as Road:', hint)
         await pg.evaluate("() => { S.anyway = false; S.wizInfo = false; wizGo(0); S.rough = true; S.roughC = [{ cx: 655, cy: 1160, r: 360 }, { cx: 1850, cy: 1180, r: 355 }]; roughTrace(); }")
         await pg.screenshot(path='/tmp/mtb_traced.png')
         js = """([C, R, mixed]) => {

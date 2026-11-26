@@ -40,6 +40,11 @@ Rolling back = pasting the previous version's link.
 - Continue anyway: the second time OK is refused on the tire outlines, a Continue anyway button appears. A tire that
   didn't trace then uses the outline through its five dots (shown as Check), and unplaced dots are taken as they are.
 
+- Grey circles: no centre dot (people would fixate on the axle). Drag inside to move, drag the outline to size (the
+  cursor shows which); no zoom window while doing either. Fill less see-through, outline bolder.
+- Knobby hint: with Road picked, if both tires trace nearly all round but scattered 1.2-6 mm (knobs), the tire step
+  says so with Switch to Mountain / Switch to Gravel.
+
 ## v2 (released 2026-11-25: datum-v2.js?v=1795643586)
 - Tan sidewalls: once a dot on a wheel is placed by hand, the trace only looks within 5 mm of the outline through
   the dots and takes the edge nearest it. Before, the strong tan/black edge inside the tread pulled the trace up to
