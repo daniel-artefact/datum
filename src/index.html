@@ -21,6 +21,14 @@ __CSS__</style>
     <label class="btn primary" for="file" tabindex="0">Open photo</label>
     <input type="file" id="file" accept="image/*" hidden>
   </div>
+  <button class="btn" id="menuBtn" aria-expanded="false" aria-controls="menu">Menu</button>
+  <div id="menu" role="menu" hidden>
+    <button data-do="file">Open photo</button><button data-do="showStart">Demos</button><button data-do="resetPhoto">Reset photo</button>
+    <div class="mlab">Show</div>
+    <button data-do="tWheel" data-toggle>Wheels</button><button data-do="tCrank" data-toggle>Crank</button><button data-do="tSta" data-toggle>Seat tube line</button><button data-do="tGrid" data-toggle>Grid</button>
+    <div class="mlab">Measure</div>
+    <button data-do="tMeas" data-toggle>Line</button><button data-do="tCirc" data-toggle>Circle</button><button data-do="tClear">Clear</button>
+  </div>
 </header>
 <main>
   <section class="stage" id="stage" aria-label="Photo">
@@ -64,7 +72,8 @@ __CSS__</style>
   <aside id="aside">
     <div class="panel wiz" id="wiz">
       <div class="wstrip" id="wizStrip"></div>
-      <h2><span class="n" id="wizN"></span><span id="wizTitle"></span></h2>
+      <h2><span class="n" id="wizN"></span><span id="wizTitle"></span><button class="wizMore" id="wizMore" type="button">Details ▴</button></h2>
+      <p id="wizMini"></p>
       <div id="wizText"></div>
       <p class="note" id="wizMsg"></p>
       <div class="row"><button class="btn small" id="wizBack">Back</button><button class="btn okb" id="wizOk">OK</button></div>

@@ -851,7 +851,17 @@ function fitView() {
   const r = cv.getBoundingClientRect();
   const z = Math.min(r.width / S.img.W, r.height / S.img.H) * 0.97;
   S.view.z = z; S.view.ox = S.img.W / 2 - r.width / (2 * z); S.view.oy = S.img.H / 2 - r.height / (2 * z);
-  if (r.width < 700) S.view.oy = -10 / z; // phones: photo at the top, clear of the setup bar at the bottom
+  if (r.width < 700) {
+    S.view.oy = -10 / z; // phones: photo at the top, clear of the setup bar at the bottom
+    // Daniel 2026-11-27: on a phone, fill the width with the bike rather than the whole photo
+    const w = (S.wheels || []).filter(Boolean).map(x => x.ell), c = w.length === 2 ? w : (S.roughC || []).map(c => ({ cx: c.cx, cy: c.cy, a: c.r, b: c.r }));
+    if (c.length === 2) {
+      const R = Math.max(c[0].a, c[1].a), x0 = Math.min(c[0].cx, c[1].cx) - 1.22 * R, x1 = Math.max(c[0].cx, c[1].cx) + 1.22 * R;
+      const y0 = Math.min(c[0].cy, c[1].cy) - 2.5 * R, y1 = Math.max(c[0].cy, c[1].cy) + 1.15 * R;
+      const zb = Math.min(r.width / (x1 - x0), r.height / (y1 - y0));
+      S.view.z = zb; S.view.ox = (x0 + x1) / 2 - r.width / (2 * zb); S.view.oy = (y0 + y1) / 2 - r.height / (2 * zb);
+    }
+  }
   draw();
 }
 function zoomAt(f, sx, sy) {
@@ -874,7 +884,7 @@ function line(a, b, col, w = 1.5, dash) {
   ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); ctx.restore();
 }
 // phones: bigger points and labels (S.lens: the magnifier keeps its own scale)
-const UI = () => (!S.lens && cv.clientWidth > 0 && cv.clientWidth < 700 ? 1.35 : 1);
+const UI = () => (!S.lens && cv.clientWidth > 0 && cv.clientWidth < 700 ? 1.1 : 1); // Daniel 2026-11-27: was 1.35; labels crowded the bike (tap targets stay big)
 const TAGFONT = () => `500 ${Math.round(12 * UI())}px "IBM Plex Mono", ui-monospace, monospace`;
 function tag(x, y, text, col, prio = 0) {
   if (S.lens) return;
@@ -1681,6 +1691,26 @@ window.addEventListener('keydown', e => {
   else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); histGo(false); }
 });
 new ResizeObserver(sizeCanvas).observe($('stage'));
+// phones: the photo takes the screen down to the setup sheet (or, after setup, to a peek of the tabs below)
+const isPhone = () => window.innerWidth <= 700;
+function sizeSheet() {
+  const st = $('stage');
+  if (!isPhone()) { if (st.style.height) { st.style.height = ''; } return; }
+  const wiz = $('wiz'), sheet = wiz.style.display === 'none' ? 150 : wiz.offsetHeight;
+  const top = Math.max(0, st.getBoundingClientRect().top + window.scrollY - window.scrollY);
+  const h = Math.max(300, Math.round(window.innerHeight - top - sheet));
+  if (Math.abs((parseFloat(st.style.height) || 0) - h) > 4) st.style.height = h + 'px';
+}
+window.addEventListener('resize', sizeSheet);
+new ResizeObserver(sizeSheet).observe($('wiz'));
+// the phone menu: Open photo, Demos, Reset photo and the overlay and measuring toggles
+$('menuBtn').onclick = e => {
+  e.stopPropagation(); const m = $('menu'), open = m.hidden;
+  for (const b of m.querySelectorAll('[data-toggle]')) b.setAttribute('aria-pressed', $(b.dataset.do).getAttribute('aria-pressed') || 'false');
+  m.hidden = !open; $('menuBtn').setAttribute('aria-expanded', String(open));
+};
+for (const b of $('menu').querySelectorAll('button')) b.onclick = () => { $('menu').hidden = true; $('menuBtn').setAttribute('aria-expanded', 'false'); $(b.dataset.do).click(); };
+window.addEventListener('pointerdown', e => { const t = e.composedPath ? e.composedPath()[0] : e.target; if (!$('menu').hidden && !$('menu').contains(t) && t !== $('menuBtn')) { $('menu').hidden = true; $('menuBtn').setAttribute('aria-expanded', 'false'); } });
 
 // ---------- side panel ----------
 const chip = (cls, t) => `<span class="chip ${cls}">${esc(t)}</span>`;
@@ -1747,7 +1777,6 @@ function renderBB() {
   else if (S.bbMode === 'auto' && S.crank) {
     const c = S.crank, s = S.scale.sx;
     h = `<div class="sline">${chip('auto', 'Auto')}<span>Found from the ${tg.name}, Ø ${fmt(2 * c.r * s, 0)} mm</span></div>`;
-    h += `<p class="note">Check that the yellow circle sits on ${where}. Drag its center or its edge handle on the photo to adjust it.</p>`;
   } else if (S.bbCircle && !S.bbCircle.placed) {
     h = `<div class="sline">${chip('fail', 'Place circle')}<span>No clear ${tg.name} found</span></div>`;
     h += `<p class="note warn">Drag the dashed circle onto ${where}; drag the small handle to resize it.</p>`;
@@ -1893,7 +1922,7 @@ const WIZ = [
   { k: 'wheels', title: 'Tire outlines', keys: [],
     text: () => S.rough ? 'DATUM couldn\'t find the tires on its own. Drag each grey circle over its tire, and drag its outline to size it: rough is fine. Then press Trace.'
       : S.autoGood && S.tirePlaced.flat().every(v => v) && !S.wheelsHand
-      ? 'Both tires were traced cleanly and agree with each other after the camera correction, so the points start green. Check that they sit on the outer edge of the tire, not the rim; move any that don\'t, or press OK.'
+      ? 'Both tires were traced cleanly and agree with each other after the camera correction, so the points start green.'
       : (S.autoWhy && S.autoWhy.length && !S.wheelsHand ? `The automatic trace needs checking: ${S.autoWhy.join('; ')}. ` : '') + 'Each tire has five points, placed from a first guess. Zoom in and put every one exactly on the outer edge of the tire' + (TR().knob ? ', on the tips of the knobs' : '') + ': drag it, or click near it to move it there. Pulsing points haven\'t been placed yet. The colours show how well the traced tire edge agrees with each point and update as you go: aim for all green.',
     status: () => [bikeLine()].concat(S.rough ? [] : S.wheels.map((w, k) => { const q = wheelQuality(w); return `${k === rearIdx() ? 'Rear' : 'Front'} tire: ${q === 'clean' ? 'traced cleanly' : q === 'check' ? 'traced, but not cleanly: check the dots' : 'edge not found: move the outline onto the tire'}`; })),
     enter: () => { S.view.mode = 'orig'; },
@@ -1908,7 +1937,7 @@ const WIZ = [
     text: () => S.side === 'drive'
       ? 'Outline the chainring with the circle: line it up with the outer edge of the chainring all the way round. Drag the circle or its edge handle, or click to move it there. From the center of the chainring, the perspective correction places the bottom bracket.'
       : 'The crank bolt locates the bottom bracket. Use the circle to find its center: line it up with the crank bolt, or the hole at the end of the spindle, all the way round. Drag the circle or its edge handle, or click to move it there. From there, the perspective correction places the bottom bracket.',
-    info: () => ['', `<p>This step is very important. Take extra care to get it right: everything in the fit and the geometry is measured from the bottom bracket.</p><p>It's normal for the BB not to sit in the center of the ${S.side === 'drive' ? 'chainring' : 'crank bolt'}. The ${S.side === 'drive' ? 'chainring' : 'crank bolt'} sits about ${fmt(S.bbDepth || (S.side === 'drive' ? 50 : 70), 0)} mm out from the middle of the frame, so on an angled photo it looks shifted. DATUM corrects the BB's position for this parallax.</p>`],
+    // Daniel 2026-11-27: no slide after this step (the 'very important' and BB-shift notes went unread)
     enter: () => { S.view.mode = 'flat'; },
     can: () => S.geo.bb ? true : 'Place the circle first.',
     zoom: () => { const b = S.bbCircle || S.crank; return b ? [[b.cx - 1.8 * b.r, b.cy - 1.8 * b.r], [b.cx + 1.8 * b.r, b.cy + 1.8 * b.r]] : null; } },
@@ -1940,6 +1969,7 @@ const bikeLine = () => `Bike: ${TR().name}${S.bike === 'mtb' ? `, ${wheelF()} fr
 // Road picked but the tires trace like knobby ones: nearly the whole edge found, but scattered by mm, not tenths
 const knobbyHint = () => S.bike === 'road' && S.wiz != null && WIZ[S.wiz].k === 'wheels' && !S.rough && !S.wizInfo && S.wheels.every(w => w && !w.fromDots && w.coverage >= 0.6 && rmsMm(w) >= 1.2 && rmsMm(w) <= 6);
 function renderWiz() {
+  $('wizMore').onclick = () => { $('wiz').classList.toggle('open'); $('wizMore').textContent = $('wiz').classList.contains('open') ? 'Details ▾' : 'Details ▴'; sizeSheet(); };
   const on = S.wiz != null, st = on ? WIZ[S.wiz] : null;
   $('wiz').style.display = on && S.img ? '' : 'none'; // no setup bar before there is a photo
   $('tabbar').style.display = on ? 'none' : '';
@@ -1969,7 +1999,14 @@ function renderWiz() {
       $('hintMtb').onclick = () => setBike('mtb'); $('hintGravel').onclick = () => setBike('gravel');
     }
   }
+  // phones: the sheet shows one line; the full text is behind Details
+  $('wiz').classList.toggle('slide', !!S.wizInfo); // Daniel 2026-11-27: info slides (Photo check) always show in full
+  const st2 = WIZ[S.wiz], lines = !S.wizInfo && st2.status ? st2.status().filter(t => !t.startsWith('Bike:')) : [];
+  const gl = (gradePhoto() || {}).level;
+  $('wizMini').textContent = S.wizInfo ? (S.wiz === 0 && gl ? 'Photo: ' + (gl === 'good' ? 'good' : gl === 'ok' ? 'usable' : 'weak') + '. Details for the full check.' : '') : lines.length ? lines.join(' · ') : (st2.html ? st2.html() : st2.text()).replace(/<[^>]+>/g, '').split(/(?<=\.)\s/)[0];
+  $('wizMsg').style.display = $('wizMsg').textContent ? '' : 'none';
   $('wizOk').disabled = false;
+  sizeSheet();
 }
 function wizOk() {
   if (WIZ[S.wiz] && WIZ[S.wiz].k === 'wheels' && S.rough && !S.wizInfo) { roughTrace(); return; }

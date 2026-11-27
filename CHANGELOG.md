@@ -3,6 +3,15 @@
 Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATUM section's Script URL.
 Rolling back = pasting the previous version's link.
 
+## v4 (in progress)
+- Phones (Daniel 2026-11-27: as much photo as possible): one-line header with a MENU (Open photo, Demos, Reset photo,
+  the overlay toggles and Line / Circle / Clear); toolbar is Photo, Corrected, Undo, Redo, Fit; the setup sheet shows
+  the step, one line and Back / OK, with the full text behind Details (the Photo check slide always shows in full);
+  the photo takes the screen down to the sheet (after setup, down to a peek of the tabs) and fits the bike edge to
+  edge; labels and dots drawn 1.1x (was 1.35x), tap targets unchanged.
+- Setup warnings removed: "Check that they sit on the outer edge..." (tires), "Check that the yellow circle sits
+  on..." (chainring), and the slide after the chainring step ("This step is very important..." and the BB shift).
+
 ## v3 (released 2026-11-26: datum-v3.js?v=1795760666)
 - Bike type, picked after choosing your photo: Road / Gravel / Mountain, and for Mountain, same size wheels or mixed
   (29 front, 27.5 rear). Also switchable in Setup > Photo, which retraces the tires.
