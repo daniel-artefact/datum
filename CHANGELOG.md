@@ -3,7 +3,7 @@
 Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATUM section's Script URL.
 Rolling back = pasting the previous version's link.
 
-## v3 (in progress)
+## v3 (released 2026-11-26: datum-v3.js?v=1795760666)
 - Bike type, picked after choosing your photo: Road / Gravel / Mountain, and for Mountain, same size wheels or mixed
   (29 front, 27.5 rear). Also switchable in Setup > Photo, which retraces the tires.
 - Knobby tires: the trace is fitted to the knob tips (the outermost edge in each slice of the wheel, slices about eight
