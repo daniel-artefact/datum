@@ -191,7 +191,7 @@ function syncInputs() {
   for (const b of document.querySelectorAll('#wheelsRow [data-w]')) b.setAttribute('aria-pressed', String((b.dataset.end === 'f' ? wheelF() : wheelR()) === b.dataset.w));
   $('sideDrive').setAttribute('aria-pressed', String(S.side === 'drive')); $('sideNds').setAttribute('aria-pressed', String(S.side === 'nds'));
   $('staManual').value = S.sta ? +S.sta.angle.toFixed(1) : S.staManual;
-  $('barD').value = S.barD;
+  $('barD318').setAttribute('aria-pressed', String(S.barD !== 35)); $('barD35').setAttribute('aria-pressed', String(S.barD === 35));
   $('stStraight').setAttribute('aria-pressed', String(!S.stOff)); $('stOffset').setAttribute('aria-pressed', String(!!S.stOff)); $('lowerHS').value = S.lowerHS ?? 1;
 }
 // Each tire has an outline (an ellipse in the photo). Auto-detection fills it in; the person can drag it.
@@ -296,9 +296,8 @@ function autoCheck() {
     if (rmsMm(w) > TR().greenRms) why.push(`${nm} trace not clean (off by ${fmt(rmsMm(w), 2)} mm on average)`);
     if (w.coverage < 0.5) why.push(`${nm} tire only ${Math.round(w.coverage * 100)}% traced`);
   });
-  const g = gradePhoto(), st = g && g.items.find(i => i.label === 'Front wheel straight');
-  const straight = st && st.level === 'good', nearSquare = g && g.slant < 6 && st && st.level !== 'poor';
-  if (!straight && !nearSquare) why.push(`camera ${g ? fmt(g.slant, 1) : '?'}° off square and front wheel ${st ? st.value : 'unknown'}`);
+  const g = gradePhoto(); // Daniel 2026-11-26: front wheel straightness dropped (never accurate); the camera angle alone decides
+  if (!(g && g.slant < 6)) why.push(`camera ${g ? fmt(g.slant, 1) : '?'}° off square`);
   return { ok: !why.length, why };
 }
 // five points evenly spaced round an outline, starting at the top
@@ -634,8 +633,9 @@ function locateSeat() {
   S.auto.sd = toI(sdR); S.auto.sdSnap = true; S.sta.end = [o[0] + u[0] * (t + 40 / s), o[1] + u[1] * (t + 40 / s)]; S.sta.sdR = sdR;
   if (sn && sr) {
     const mx = (sn[0] + sr[0]) / 2, my = (sn[1] + sr[1]) / 2;
-    const e2 = silhouetteEdge(mx, my, 0, -1, -30 / s, 45 / s);
-    S.auto.mid = Core.apply(S.rect.Hinv, mx, e2 != null ? my - e2 : my); S.auto.midSnap = e2 != null;
+    // Daniel 2026-11-26: the plain middle of Nose and Rear, no snapping (a busy background could pull it 27 mm up; the
+    // middle is at most ~3 mm off the top surface)
+    S.auto.mid = Core.apply(S.rect.Hinv, mx, my); S.auto.midSnap = false;
   }
 }
 // First placement of the steering axis: 72° and a 45 mm fork offset, so the person only has to nudge it.
@@ -740,7 +740,7 @@ function geoValues(P) {
   if (bb && ref) { o.Sx = bb[0] - ref[0]; o.Sy = ref[1] - bb[1]; }
   if (bb && bar) { o.Hx = bar[0] - bb[0]; o.Hy = bar[1] - bb[1]; o.barH = h(o.Hx, o.Hy); o.barTheta = Math.atan2(o.Hy, o.Hx) * DEG; }
   if (ref && bar) {
-    o.saddleToBarReach = bar[0] - ref[0];                         // engine "Butt to bars": sweet spot to bar clamp center, level
+    o.saddleToBarReach = h(bar[0] - ref[0], bar[1] - ref[1]);     // "Butt to bars", Daniel 2026-11-26: straight, sweet spot to the bar clamp center (as the size finder's Saddle to bars); no level reach
     o.drop = ref[1] - (bar[1] + S.barD / 2);                      // engine barDrop: sweet spot to the top of the bar clamp
     o.rise = -o.drop;
     o.saddleToBarDrop = ref[1] - bar[1];                          // engine saddleToBarDrop: to the bar clamp center
@@ -803,11 +803,7 @@ function gradePhoto() {
   const cov = Math.min(...S.wheels.map(w => Math.min(1, w.coverage))), rms = Math.max(...S.wheels.map(w => w.rms));
   const rmm = Math.max(...S.wheels.map(rmsMm)); // the same millimeter limits as the dots and the Rear/Front labels
   add(cov >= 0.45 && rmm <= TR().greenRms ? 'good' : cov >= 0.3 && rmm <= TR().yellowRms ? 'ok' : 'poor', 'Tire outlines', `${Math.round(cov * 100)}% traced, within ${fmt(rmm, 1)} mm`, 'Move any yellow or red dots onto the outer edge of the tire, or use a plainer background.');
-  // A turned front wheel makes the front tire, and only the front tire, look narrower than tall after correction.
-  // Squash that both tires share (edge finding at the ground, the solve itself) says nothing about steering.
-  const oor = S.rect.wheels.map(w => { const e = Core.ellExtents(w.ell); return e.h / e.w - 1; }), ri = rearIdx();
-  const diff = Math.abs(oor[1 - ri] - oor[ri]), steer = Math.sqrt(2 * diff) * DEG;
-  if (S.flatten) add(diff < 0.003 ? 'good' : diff < 0.008 ? 'ok' : 'poor', 'Front wheel straight', diff < 0.003 ? 'lined up' : `about ${fmt(steer, 0)}° turned`, 'Straighten the front wheel so both wheels line up.');
+  // Daniel 2026-11-26: no front wheel straightness item; it was never accurate
   if (S.sWork) {
     const mm = S.sWork;
     add(mm < 1 ? 'good' : mm < 2 ? 'ok' : 'poor', 'Resolution', `${fmt(mm, 2)} mm per pixel`, 'Upload the original, full-size photo.');
@@ -1303,7 +1299,8 @@ function draw() {
       const corner = r2s([topR[0], refR[1]]);
       line(ref, corner, COL.fit, 1.4, [3, 4]); line(corner, top, COL.fit, 1.6);
       if (S.vals && S.vals.drop != null) tag(corner[0] + 52, (corner[1] + top[1]) / 2, (S.vals.drop >= 0 ? `${fmt(S.vals.drop, 0)} mm drop` : `${fmt(-S.vals.drop, 0)} mm rise`) + (isGuess('drop') ? '?' : ''), COL.fit);
-      if (S.vals && S.vals.saddleToBarReach != null) tag((ref[0] + corner[0]) / 2, (ref[1] + corner[1]) / 2 - 14, `butt to bars ${fmt(S.vals.saddleToBarReach, 0)}` + (isGuess('saddleToBarReach') ? '?' : ''), COL.fit);
+      const barS = r2s(barR); line(ref, barS, COL.fit, 1.4); // butt to bars: straight to the clamp center
+      if (S.vals && S.vals.saddleToBarReach != null) tag((ref[0] + barS[0]) / 2, (ref[1] + barS[1]) / 2 + 16, `butt to bars ${fmt(S.vals.saddleToBarReach, 0)}` + (isGuess('saddleToBarReach') ? '?' : ''), COL.fit);
     }
     if (bbT && S.geo.bb && !bbStep()) { const o = shakeOff('bb'); dot([bbT[0] + o, bbT[1]], COL.geo, 6, 'BB', o, 22); locked(bbT, 'bb', 'bb'); }
   }
@@ -1317,15 +1314,26 @@ function draw() {
     const pt = S.geo[gdef.k]; if (!pt || gdef.k === 'bb' || ws) continue;
     if (gdef.grp === 'frame' ? !(tabGeo() || (forkPlacing() && gdef.k === 'hb')) : !(tabFit() || (tabGeo() && gdef.k === 'st') || (shPlacing() && (gdef.k === 'st' || gdef.k === 'sd')))) continue;
     const s = i2s(gdef.k === 'sd' && S.auto.sd ? S.auto.sd : pt.p), o = off[gdef.k] || [0, -19];
+    if (gdef.k === 'bar' && S.rect && S.scale && S.scale.sx) { // Daniel 2026-11-26: a dotted circle the size of the bar, to centre it
+      const q = Core.apply(S.rect.H, pt.p[0], pt.p[1]), e = r2s([q[0] + S.barD / 2 / S.scale.sx, q[1]]), c = r2s(q), rr = Math.hypot(e[0] - c[0], e[1] - c[1]);
+      ctx.save(); ctx.setLineDash([3, 3]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.beginPath(); ctx.arc(s[0], s[1], rr, 0, 6.2832); ctx.stroke();
+      ctx.strokeStyle = COL.fit; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(s[0], s[1], rr, 0, 6.2832); ctx.stroke(); ctx.restore();
+    }
     const sure = !untouched(gdef.k);
     const col = gdef.grp === 'frame' ? COL.geo : COL.fit;
     if (ON_AXIS[gdef.k] && S.steer && S.scale && S.scale.sx) {
       const toR = q => Core.apply(S.rect.H, q[0], q[1]), G = toR(S.steer.g), T = toR(S.steer.t), L = Math.hypot(T[0] - G[0], T[1] - G[1]) || 1;
-      const nx = -(T[1] - G[1]) / L, ny = (T[0] - G[0]) / L, q = toR(onSteer(pt.p)), h = 25 / S.scale.sx; // ±25 mm across the axis
+      const nx = -(T[1] - G[1]) / L, ny = (T[0] - G[0]) / L, q = toR(onSteer(pt.p)), h = 32 / S.scale.sx; // ±32 mm across the axis
       const a = r2s([q[0] - nx * h, q[1] - ny * h]), b = r2s([q[0] + nx * h, q[1] + ny * h]), m = r2s(q);
       const mc = markCol(gdef.k);
       if (!sure) beacon(m, mc);
       line(a, b, COL.geo, 2); dot(m, mc, 4.5);
+      // Daniel 2026-11-26: bare ticks at the common head tube diameters (46, 52, 58): line a pair up with the tube's edges
+      const ux = (T[0] - G[0]) / L, uy = (T[1] - G[1]) / L, tk = 4 / S.scale.sx;
+      for (const dia of [46, 52, 58]) for (const sg of [-1, 1]) {
+        const c = [q[0] + sg * nx * dia / 2 / S.scale.sx, q[1] + sg * ny * dia / 2 / S.scale.sx];
+        line(r2s([c[0] - ux * tk, c[1] - uy * tk]), r2s([c[0] + ux * tk, c[1] + uy * tk]), COL.geo, 1.5);
+      }
       tag(m[0] + (bikeFrame(S.rect).dir > 0 ? 62 : -62), m[1], gdef.short, COL.geo);
       handle(m, p => steerFromHT(gdef.k, p), null, gdef.k);
       continue;
@@ -1411,10 +1419,12 @@ function drawLoupe(sx, sy) {
   const vx = sx / v.z + v.ox, vy = sy / v.z + v.oy;
   let span = 168 / zoom;
   // holding the stem clamp or a tube-face crossbar: the magnifier shows a 100 mm window, so the whole tube end is in view
-  if (S.drag && S.drag.h && ['bar', 'stt', 'ht', 'hb'].includes(S.drag.h.key) && S.rect && S.scale && S.scale.sx) {
+  // Daniel 2026-11-26: the saddle points get a fixed 60 mm window too (photo pixels zoomed in too far on sharp photos)
+  const LENS_MM = { bar: 100, stt: 70, ht: 70, hb: 70, sn: 60, sr: 60, sd: 60 };
+  if (S.drag && S.drag.h && LENS_MM[S.drag.h.key] && S.rect && S.scale && S.scale.sx) {
     let mmPerView = S.scale.sx;
     if (!flatView()) { const a = Core.apply(S.rect.H, vx, vy), b = Core.apply(S.rect.H, vx + 1, vy); mmPerView *= Math.hypot(b[0] - a[0], b[1] - a[1]); }
-    span = (S.drag.h.key === 'bar' ? 100 : 70) / mmPerView; // stem clamp 100 mm, tube faces 70 mm
+    span = LENS_MM[S.drag.h.key] / mmPerView; // stem clamp 100 mm, tube faces 70 mm, saddle 60 mm
   }
   const Lc = loupe.offsetWidth || 168, keep = { view: S.view, handles: S.handles, locked: S.locked, lineHandles: S.lineHandles, ctx };
   lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.fillStyle = '#000'; lctx.fillRect(0, 0, n, n);
@@ -1787,7 +1797,7 @@ function fitRows() {
     ['saddleHeight', S.sh > 0 && S.scale && S.scale.shPx != null ? 'Saddle height (also used for scale)' : 'Saddle height', 'mm'],
     ['saddleSetback', 'Setback (nose)', 'mm'], ['sweetSpotSetback', 'Setback (sweet spot)', 'mm'],
     S.vals && S.vals.drop < 0 ? ['rise', 'Bar rise (to top of bar)', 'mm'] : ['drop', 'Bar drop (to top of bar)', 'mm'],
-    ['saddleToBarReach', 'Butt to bars (level)', 'mm'], ['noseToBarDirect', 'Nose to bar', 'mm'],
+    ['saddleToBarReach', 'Butt to bars', 'mm'], ['noseToBarDirect', 'Nose to bar', 'mm'],
     ['sec', 'Parameters'],
     ['Hx', 'Hx', 'mm'], ['Hy', 'Hy', 'mm'], ['barH', 'H (BB to bar)', 'mm'], ['barTheta', 'Theta', '°'],
     ['effSeatAngleSaddle', 'Seat angle to saddle', '°'], ['saddleToBarDrop', 'Bar drop (to bar center)', 'mm'],
@@ -1894,17 +1904,16 @@ const WIZ = [
       return S.wheels.every(w => wheelQuality(w) !== 'none') ? true : 'Both tire edges have to be traced first. If they can\'t be, the photo needs a plainer background.'; },
     zoom: () => null,
     info: () => ['Photo check', photoReport()] },
-  { k: 'bb', title: 'Bottom bracket', show: ['photoPanel', 'bbPanel'],
+  { k: 'bb', title: 'Chainring location', show: ['photoPanel', 'bbPanel'],
     text: () => S.side === 'drive'
-      ? 'The chainring locates the bottom bracket. Use the circle to find the center of the chainring: line it up with the outer edge of the chainring all the way round. Drag the circle or its edge handle, or click to move it there. From the center of the chainring, the perspective correction places the bottom bracket.'
+      ? 'Outline the chainring with the circle: line it up with the outer edge of the chainring all the way round. Drag the circle or its edge handle, or click to move it there. From the center of the chainring, the perspective correction places the bottom bracket.'
       : 'The crank bolt locates the bottom bracket. Use the circle to find its center: line it up with the crank bolt, or the hole at the end of the spindle, all the way round. Drag the circle or its edge handle, or click to move it there. From there, the perspective correction places the bottom bracket.',
-    info: () => ['Check it carefully', `<p>This step is very important. Take extra care to get it right: everything in the fit and the geometry is measured from the bottom bracket.</p><p>It's normal for the BB not to sit in the center of the ${S.side === 'drive' ? 'chainring' : 'crank bolt'}. The ${S.side === 'drive' ? 'chainring' : 'crank bolt'} sits about ${fmt(S.bbDepth || (S.side === 'drive' ? 50 : 70), 0)} mm out from the middle of the frame, so on an angled photo it looks shifted. DATUM corrects the BB's position for this parallax.</p>`],
+    info: () => ['', `<p>This step is very important. Take extra care to get it right: everything in the fit and the geometry is measured from the bottom bracket.</p><p>It's normal for the BB not to sit in the center of the ${S.side === 'drive' ? 'chainring' : 'crank bolt'}. The ${S.side === 'drive' ? 'chainring' : 'crank bolt'} sits about ${fmt(S.bbDepth || (S.side === 'drive' ? 50 : 70), 0)} mm out from the middle of the frame, so on an angled photo it looks shifted. DATUM corrects the BB's position for this parallax.</p>`],
     enter: () => { S.view.mode = 'flat'; },
     can: () => S.geo.bb ? true : 'Place the circle first.',
     zoom: () => { const b = S.bbCircle || S.crank; return b ? [[b.cx - 1.8 * b.r, b.cy - 1.8 * b.r], [b.cx + 1.8 * b.r, b.cy + 1.8 * b.r]] : null; } },
   { k: 'scale', title: 'Scale', show: ['scalePanel'],
-    html: () => 'DATUM needs a real-world reference to set the scale. <strong>It\'s only as accurate as your physical measurement</strong>, and it affects the accuracy of the entire model.</p>'
-      + '<p>Wheelbase is the most accurate. Tire size can be used if you don\'t have an easy way of measuring; keep in mind tires can vary 2-3% from their stated size. An accurate saddle height measurement is good to know regardless. Entering all three improves the accuracy of the model.',
+    html: () => 'DATUM needs a real-world reference to set the scale. <strong>It\'s only as accurate as your physical measurement</strong>, and it affects the accuracy of the entire model.',
     text: () => '',
     final: () => '<p>DATUM is only as accurate as the information you put in. With good inputs, DATUM can confidently reach &plusmn;3 mm.</p><p>Don\'t get lost in the numbers. Transferring a fit between bikes will never be an exact match. Expect &plusmn;10 mm in the real world. Always leave room to adjust and tweak as your body changes: this is the key to a good custom bike.</p><p class="sig">- Daniel</p>',
     enter: () => { S.view.mode = 'flat'; },
@@ -2139,7 +2148,9 @@ const seg = (a, b, key, va, vb) => { $(a).onclick = () => { S[key] = va; syncInp
 $('stStraight').onclick = () => { S.stOff = false; afterChange(); };
 $('stOffset').onclick = () => { S.stOff = true; afterChange(); };
 $('lowerHS').onchange = e => { const v = parseFloat(e.target.value); S.lowerHS = v >= 0 ? v : 1; afterChange(); };
-$('barD').onchange = e => { const v = parseFloat(e.target.value); if (v > 15) { S.barD = v; afterChange(); } };
+// Daniel 2026-11-26: bar diameter is a toggle, 31.8 (default, every bike type) or 35
+$('barD318').onclick = () => { S.barD = 31.8; syncInputs(); afterChange(); };
+$('barD35').onclick = () => { S.barD = 35; syncInputs(); afterChange(); };
 $('flattenOn').onchange = e => { S.flatten = e.target.checked; afterChange(); };
 $('focalMode').onchange = e => { S.focalMode = e.target.value; $('f35').disabled = S.focalMode !== 'fixed'; if (S.focalMode === 'fixed' && !S.f35) { S.f35 = 50; $('f35').value = 50; } afterChange(); };
 $('f35').onchange = e => { const v = parseFloat(e.target.value); if (v >= 10) { S.f35 = v; afterChange(); } };

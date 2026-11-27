@@ -90,7 +90,7 @@ __CSS__</style>
     </div>
     <div class="panel" data-tab="setup" id="scalePanel">
       <h2>Scale</h2>
-      <p>Everything else is measured against this, so give it at least one number you trust. Best: measure the wheelbase, axle to axle, with a tape. Next best: the tire size, or the tire's outer diameter if you measured it.</p>
+      <p>Wheelbase is the most accurate. Tire size can be used if you don't have an easy way of measuring; keep in mind tires can vary 2-3% from their stated size. An accurate saddle height measurement is good to know regardless. Entering all three improves the accuracy of the model.</p>
       <div class="srefs">
         <div class="sref hd"><span></span><span class="read">Photo</span><span class="val">Known</span><span></span></div>
         <div class="sref"><span class="nm">Wheelbase <span class="best">best</span></span><span class="read" id="wbRead"></span><span class="val"><input type="number" id="wb" step="0.5" min="300" placeholder="mm" autocomplete="off"></span><span class="chk" id="wbChk"></span></div>
@@ -100,7 +100,6 @@ __CSS__</style>
         <div class="sref" id="forkRow"><span class="nm">Fork A2C <button class="btn small shbtn" id="forkPlace" aria-pressed="false">Place crown</button></span><span class="read" id="forkRead"></span><span class="val"><select id="forkSel" autocomplete="off"></select></span><span class="chk" id="forkChk"></span></div>
         <div class="sref" id="forkManualRow"><span class="nm">Axle to crown, measured</span><span class="read"></span><span class="val"><input type="number" id="forkA2C" step="0.5" min="300" placeholder="mm" autocomplete="off"></span><span></span></div>
       </div>
-      <p class="note">Known: a number you trust, from a tape measure or a geometry chart. Every known value sets the scale, and the photo's reading is shown against it. Saddle height can be entered once the saddle top is placed: press Place saddle top and drag the Top point onto the top of the saddle.</p>
       <div id="scaleOut"></div>
     </div>
     <div class="panel" data-tab="setup" id="seatPanel">
@@ -108,7 +107,7 @@ __CSS__</style>
       <div class="fields"><label class="f">Seat tube <span class="seg" role="group" aria-label="Seat tube"><button id="stStraight" aria-pressed="true">Straight</button><button id="stOffset" aria-pressed="false">Offset</button></span></label></div>
     </div>
     <div class="panel" data-tab="step" id="bbPanel">
-      <h2>Bottom bracket</h2>
+      <h2>Chainring location</h2>
       <div id="bbOut"></div>
       <div class="row"><button class="btn small" id="bbAuto">Find automatically</button></div>
     </div>
@@ -134,7 +133,7 @@ __CSS__</style>
       <h2>Fit</h2>
       <p>Drag on the photo: the seat tube angle, the saddle top, the saddle nose and rear, and the stem clamp. The sweet spot is the middle of the saddle, on its top surface; drop and butt to bars are taken from it, as in the ARTEFACT geometry engine. Pulsing yellow points need you; they turn green once placed. A placed point goes yellow again if a later change shifts it more than 0.5% from where you set it.</p>
       <div class="fields">
-        <label class="f">Bar Ø, mm <input type="number" id="barD" value="31.8" step="0.1" min="20" style="width:66px"></label>
+        <label class="f">Bar Ø, mm <span class="seg" role="group" aria-label="Bar diameter"><button id="barD318" aria-pressed="true">31.8</button><button id="barD35" aria-pressed="false">35</button></span></label>
       </div>
       <div id="fitOut"></div>
       <div class="row">

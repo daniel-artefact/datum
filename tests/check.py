@@ -32,6 +32,12 @@ async def numbers(b):
         await pg.wait_for_timeout(9000)
         await pg.evaluate("() => { S.wiz = null; S.setupDone = true; afterChange(); }"); await pg.wait_for_timeout(500)
         res[ex] = await pg.evaluate(f"() => {{ const o = {{}}; for (const k of {json.dumps(KEYS)}) if (S.vals && S.vals[k] != null) o[k] = Math.round(S.vals[k] * 100) / 100; return o; }}")
+        # the middle of Nose-Rear sits 2-5 mm above the Top point on the demos, hence 8 mm
+        # the fit numbers must agree with each other: saddle height and sweet spot setback put the saddle at a height
+        # that Hy plus the drop to the bar center must reproduce (Daniel 2026-11-26: DATUM said 122.7 where it was 95)
+        c = await pg.evaluate("() => { const v = S.vals; return { sad: Math.sqrt(v.saddleHeight ** 2 - v.sweetSpotSetback ** 2), bar: v.Hy + v.saddleToBarDrop }; }")
+        if abs(c['sad'] - c['bar']) > 8: fails.append(f"{ex}: saddle height and drop disagree: saddle {c['sad']:.1f} vs Hy + drop {c['bar']:.1f}")
+        print(f"  {ex}: saddle top {c['sad']:.1f} mm up, Hy + drop {c['bar']:.1f} mm")
     if errs: fails.append(f'standalone page errors: {errs}')
     await pg.close(); return res
 async def store(b):

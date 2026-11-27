@@ -48,6 +48,18 @@ Rolling back = pasting the previous version's link.
 - Fix: Reset photo reloaded your photo as Road (and 700c tire sizes); it now keeps the bike type and wheel sizes.
 - The tire step names the bike type it is judging the tires as (e.g. Bike: Mountain, 29 front / 29 rear).
 
+- Cleanup (Daniel 2026-11-26): setup step 2 is Chainring location (outline the chainring); no front wheel straightness
+  in the photo check or the auto check (never accurate); no "Check it carefully" heading; the wheelbase paragraph
+  sits under SCALE in the panel and the "Known" note is gone.
+- Saddle points get a fixed 60 mm zoom window (was photo pixels, too close on sharp photos).
+- Bare ticks at 46 / 52 / 58 mm on the HT top and bottom crossbars (now +/-32 mm) to centre the head tube.
+- Bar: dotted circle the size of the bar on the bar point; bar diameter is a 31.8 / 35 toggle, 31.8 by default.
+- Saddle center is the plain middle of Nose and Rear (no snapping). On a busy background the snap could land 27 mm
+  up, so drop read 122.7 where it was about 95. Demos moved: drop +3.5 mm (the middle sits 2-5 mm above the Top
+  point). New check: saddle height and setback must agree with Hy + drop within 8 mm.
+- Butt to bars is the straight distance from the saddle center to the bar clamp center (as the size finder's Saddle
+  to bars); no level reach.
+
 ## v2 (released 2026-11-25: datum-v2.js?v=1795643586)
 - Tan sidewalls: once a dot on a wheel is placed by hand, the trace only looks within 5 mm of the outline through
   the dots and takes the edge nearest it. Before, the strong tan/black edge inside the tread pulled the trace up to
