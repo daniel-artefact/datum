@@ -3,7 +3,7 @@
 Each release is a file in Shopify Content > Files (datum-vN.js), set in the DATUM section's Script URL.
 Rolling back = pasting the previous version's link.
 
-## v4 (in progress)
+## v4 (released 2026-11-27: datum-v4.js?v=1795821668)
 - Phones (Daniel 2026-11-27: as much photo as possible): one-line header with a MENU (Open photo, Demos, Reset photo,
   the overlay toggles and Line / Circle / Clear); toolbar is Photo, Corrected, Undo, Redo, Fit; the setup sheet shows
   the step, one line and Back / OK, with the full text behind Details (the Photo check slide always shows in full);
